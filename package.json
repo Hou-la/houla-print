@@ -1,6 +1,6 @@
 {
   "name": "houla-print",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Hou.la Print — Desktop app for automatic label printing on shop orders",
   "main": "dist/main/index.js",
   "author": "Hou.la <hello@hou.la>",
