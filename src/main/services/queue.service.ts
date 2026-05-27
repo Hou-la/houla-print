@@ -641,10 +641,39 @@ export class QueueService {
   }
 
   /**
-   * Download a PDF from an external URL and return it as a Buffer.
+   * Download a PDF from a URL and return it as a Buffer.
+   * If the URL is an internal API path (starts with /api/), resolves it
+   * against the configured API base URL and adds JWT authentication.
    */
   private async downloadPdfFromUrl(url: string): Promise<Buffer> {
-    const response = await fetch(url);
+    let resolvedUrl = url;
+    const headers: Record<string, string> = {};
+
+    if (url.startsWith('/api/')) {
+      // Internal API endpoint — resolve against base URL and add auth
+      const baseUrl = this.store.getApiUrl();
+      resolvedUrl = `${baseUrl}${url}`;
+      const token = this.store.getAccessToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    } else {
+      // External URL — no auth added
+    }
+
+    let response = await fetch(resolvedUrl, { headers });
+
+    // Auto-refresh JWT on 401 for internal API calls
+    if (response.status === 401 && url.startsWith('/api/')) {
+      try {
+        const newToken = await this.api.refreshAccessToken();
+        headers['Authorization'] = `Bearer ${newToken}`;
+        response = await fetch(resolvedUrl, { headers });
+      } catch {
+        // refresh failed — throw the original 401
+      }
+    }
+
     if (!response.ok) {
       throw new Error(`PDF download failed: ${response.status} ${response.statusText}`);
     }

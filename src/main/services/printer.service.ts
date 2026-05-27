@@ -146,23 +146,27 @@ export class PrinterService {
    * Print PDF file to a standard printer.
    */
   async printPdf(printerName: string, pdfBuffer: Buffer): Promise<void> {
-    // Write PDF to temp file, then print via system command
     const fs = await import('fs/promises');
     const os = await import('os');
     const path = await import('path');
+
     const tmpFile = path.join(os.tmpdir(), `houla-print-${Date.now()}.pdf`);
+
+    // Save a debug copy so we can inspect what was sent to the printer
+    const debugFile = path.join(os.homedir(), 'Desktop', `houla-label-debug.pdf`);
+    await fs.writeFile(debugFile, pdfBuffer).catch(() => {});
+    console.log(`[PrinterService] Debug PDF saved to: ${debugFile} (${pdfBuffer.length} bytes)`);
+
+    // Open in default viewer so user can inspect
+    const { exec: execCb } = await import('child_process');
+    execCb(`start "" "${debugFile}"`);
 
     try {
       await fs.writeFile(tmpFile, pdfBuffer);
 
       if (process.platform === 'win32') {
-        const { exec } = await import('child_process');
-        const { promisify } = await import('util');
-        const execAsync = promisify(exec);
-        // Use SumatraPDF or system default for silent printing
-        await execAsync(
-          `powershell -Command "Start-Process -FilePath '${tmpFile}' -Verb PrintTo -ArgumentList '${printerName}' -WindowStyle Hidden"`,
-        );
+        const { print } = await import('pdf-to-printer');
+        await print(tmpFile, { printer: printerName, scale: 'fit' });
       } else {
         const { exec } = await import('child_process');
         const { promisify } = await import('util');
