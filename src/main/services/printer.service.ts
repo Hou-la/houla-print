@@ -423,7 +423,13 @@ export class PrinterService {
   // ═══════════════════════════════════════════════════════
 
   /**
-   * Windows: Send raw data to printer via PowerShell + Win32 spooler.
+   * Windows: Send raw data to printer via .NET RawPrinterHelper (Win32 spooler API).
+   *
+   * Uses [DllImport("winspool.drv")] to open the printer, start a RAW document,
+   * and write bytes directly — no network share required.
+   *
+   * Fallback: if the .NET approach fails, try the legacy COPY /B to \\localhost\printer
+   * (which only works if the printer is shared).
    */
   private async printRawWindows(printerName: string, data: string): Promise<void> {
     const { exec } = await import('child_process');
@@ -438,12 +444,72 @@ export class PrinterService {
     try {
       await fs.writeFile(tmpFile, data, 'utf-8');
 
-      // Use COPY /B for raw printing to the Windows printer spooler
-      // Printer name must be escaped for cmd
-      const safePrinterName = printerName.replace(/"/g, '""');
-      await execAsync(`copy /B "${tmpFile}" "\\\\localhost\\${safePrinterName}"`, {
-        shell: 'cmd.exe',
-      });
+      // Primary method: Use PowerShell + .NET P/Invoke to send raw data via Win32 spooler API
+      // This does NOT require the printer to be shared (\\localhost\...) — it talks to the
+      // local spooler directly, just like any Windows application would print.
+      //
+      // IMPORTANT: The script is written to a temp .ps1 file and executed with -File,
+      // because inlining a here-string (@'...'@) in a -Command one-liner is impossible
+      // (PowerShell requires @' to be the LAST thing on its line).
+      const safeName = printerName.replace(/'/g, "''");
+      const psScript = `$signature = @'
+[DllImport("winspool.drv", CharSet=CharSet.Unicode, SetLastError=true)]
+public static extern bool OpenPrinter(string pPrinterName, out IntPtr phPrinter, IntPtr pDefault);
+[DllImport("winspool.drv", SetLastError=true)]
+public static extern bool ClosePrinter(IntPtr hPrinter);
+[DllImport("winspool.drv", CharSet=CharSet.Unicode, SetLastError=true)]
+public static extern bool StartDocPrinter(IntPtr hPrinter, int level, ref DOCINFOA pDocInfo);
+[DllImport("winspool.drv", SetLastError=true)]
+public static extern bool EndDocPrinter(IntPtr hPrinter);
+[DllImport("winspool.drv", SetLastError=true)]
+public static extern bool StartPagePrinter(IntPtr hPrinter);
+[DllImport("winspool.drv", SetLastError=true)]
+public static extern bool EndPagePrinter(IntPtr hPrinter);
+[DllImport("winspool.drv", SetLastError=true)]
+public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, int dwCount, out int dwWritten);
+[StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
+public struct DOCINFOA { public string pDocName; public string pOutputFile; public string pDatatype; }
+'@
+Add-Type -MemberDefinition $signature -Name RawPrint -Namespace Win32 -PassThru | Out-Null
+$hPrinter = [IntPtr]::Zero
+$ok = [Win32.RawPrint]::OpenPrinter('${safeName}', [ref]$hPrinter, [IntPtr]::Zero)
+if (-not $ok) { throw "OpenPrinter failed for '${safeName}' (error $([System.Runtime.InteropServices.Marshal]::GetLastWin32Error()))" }
+try {
+  $di = New-Object Win32.RawPrint+DOCINFOA
+  $di.pDocName = 'Hou.la Raw Print'
+  $di.pDatatype = 'RAW'
+  [Win32.RawPrint]::StartDocPrinter($hPrinter, 1, [ref]$di) | Out-Null
+  [Win32.RawPrint]::StartPagePrinter($hPrinter) | Out-Null
+  $bytes = [System.IO.File]::ReadAllBytes('${tmpFile.replace(/\\/g, '\\\\')}')
+  $ptr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($bytes.Length)
+  [System.Runtime.InteropServices.Marshal]::Copy($bytes, 0, $ptr, $bytes.Length)
+  $written = 0
+  [Win32.RawPrint]::WritePrinter($hPrinter, $ptr, $bytes.Length, [ref]$written) | Out-Null
+  [System.Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)
+  [Win32.RawPrint]::EndPagePrinter($hPrinter) | Out-Null
+  [Win32.RawPrint]::EndDocPrinter($hPrinter) | Out-Null
+} finally {
+  [Win32.RawPrint]::ClosePrinter($hPrinter) | Out-Null
+}
+`;
+
+      const psFile = path.join(os.tmpdir(), `houla-rawprint-${Date.now()}.ps1`);
+      try {
+        await fs.writeFile(psFile, psScript, 'utf-8');
+        await execAsync(
+          `powershell -NoProfile -ExecutionPolicy Bypass -File "${psFile}"`,
+          { timeout: 15000 },
+        );
+      } catch (primaryErr: any) {
+        // Fallback: legacy COPY /B method (requires printer to be shared on \\localhost\...)
+        console.warn(`[Printer] .NET raw print failed, trying COPY /B fallback: ${primaryErr.message}`);
+        const safePrinterName = printerName.replace(/"/g, '""');
+        await execAsync(`copy /B "${tmpFile}" "\\\\localhost\\${safePrinterName}"`, {
+          shell: 'cmd.exe',
+        });
+      } finally {
+        await fs.unlink(psFile).catch(() => {});
+      }
     } finally {
       await fs.unlink(tmpFile).catch(() => {});
     }

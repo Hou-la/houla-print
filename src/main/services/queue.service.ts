@@ -627,13 +627,9 @@ export class QueueService {
           const buffer = Buffer.from(job.labelData, 'base64');
           await this.printer.printPdf(printerName, buffer);
         } else if (job.labelUrl) {
-          // Download PDF from API then print
-          const data = await this.api.getLabelData(
-            this.getApiKeyForJob(job),
-            job.id,
-          );
-          const buffer = Buffer.from(data, 'base64');
-          await this.printer.printPdf(printerName, buffer);
+          // Download PDF from external URL (e.g. Sendcloud label)
+          const pdfBuffer = await this.downloadPdfFromUrl(job.labelUrl);
+          await this.printer.printPdf(printerName, pdfBuffer);
         } else {
           throw new Error('No label data or URL for PDF job');
         }
@@ -642,6 +638,18 @@ export class QueueService {
       default:
         throw new Error(`Unsupported label format: ${job.labelFormat}`);
     }
+  }
+
+  /**
+   * Download a PDF from an external URL and return it as a Buffer.
+   */
+  private async downloadPdfFromUrl(url: string): Promise<Buffer> {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`PDF download failed: ${response.status} ${response.statusText}`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
   }
 
   /**

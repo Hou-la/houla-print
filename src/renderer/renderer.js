@@ -28,10 +28,6 @@ const $statFailed = document.getElementById('stat-failed');
 const $sepFailed = document.getElementById('sep-failed');
 const $workspaceList = document.getElementById('workspace-list');
 const $printerList = document.getElementById('printer-list');
-const $assignmentList = document.getElementById('assignment-list');
-const $labelSizeList = document.getElementById('label-size-list');
-const $labelPreviewSection = document.getElementById('section-label-preview');
-const $labelPreviewImg = document.getElementById('label-preview-img');
 const $offlineBanners = document.getElementById('offline-banners');
 const $errorBanner = document.getElementById('error-banner');
 const $errorText = document.getElementById('error-text');
@@ -179,8 +175,7 @@ function updateUI(state) {
   if (!testPrintInProgress) {
     renderPrinters(state.printers);
   }
-  renderAssignments(state.printerAssignments, state.printers);
-  renderLabelSizes(state.workspaces);
+  renderJobConfigs(state.printerAssignments, state.printers, state.workspaces);
   renderHistory(state.printHistory);
 }
 
@@ -357,84 +352,77 @@ function renderPrinters(printers) {
 }
 
 // ═══════════════════════════════════════════════════════
-// Printer assignments
+// Job config panels (per job-type tabs)
 // ═══════════════════════════════════════════════════════
 
-function renderAssignments(assignments, printers) {
+function renderJobConfigs(assignments, printers, workspaces) {
   const printerOptions = (printers || [])
     .map(p => `<option value="${escapeAttr(p.name)}">${escapeHtml(p.displayName)}</option>`)
     .join('');
 
-  $assignmentList.innerHTML = Object.entries(JOB_TYPE_LABELS).map(([type, label]) => {
-    const currentPrinter = assignments?.[type] || '';
-    return `
-      <div class="assignment-item">
-        <span class="assignment-label">${label}</span>
-        <select class="assignment-select" data-job-type="${type}">
-          <option value="">Non assignée</option>
-          ${printerOptions}
-        </select>
-      </div>
-    `;
-  }).join('');
-
-  // Set current values
-  $assignmentList.querySelectorAll('select').forEach(el => {
-    const type = el.dataset.jobType;
+  // Populate printer dropdowns in all job panels
+  document.querySelectorAll('[data-job-assign]').forEach(el => {
+    const type = el.dataset.jobAssign;
     const current = assignments?.[type] || '';
+    // Preserve first "Non assignée" option, add printer options
+    el.innerHTML = `<option value="">Non assignée</option>${printerOptions}`;
     el.value = current;
 
-    el.addEventListener('change', (e) => {
+    // Remove old listeners by replacing node
+    const clone = el.cloneNode(true);
+    clone.value = current;
+    el.parentNode.replaceChild(clone, el);
+
+    clone.addEventListener('change', (e) => {
       api.assignPrinter(type, e.target.value || null);
-      // When product_label assignment changes, update preview with that printer's format
+      // For product_label, update preview with printer's detected format
       if (type === 'product_label' && currentState) {
         const printerName = e.target.value;
         const formats = currentState.printerLabelFormats || {};
         const fmt = printerName ? formats[printerName] : null;
         if (fmt) {
-          loadLabelPreview(fmt.widthMm + 'x' + fmt.heightMm);
+          loadJobPreview('product_label', fmt.widthMm + 'x' + fmt.heightMm);
         }
       }
     });
   });
+
+  // Render product_label label size selector
+  renderProductLabelSizes(workspaces);
 }
 
-// ═══════════════════════════════════════════════════════
-// Tab navigation
-// ═══════════════════════════════════════════════════════
+/**
+ * Render label size dropdown(s) inside the product_label sub-panel.
+ */
+function renderProductLabelSizes(workspaces) {
+  const container = document.getElementById('job-label-size-product_label');
+  if (!container) return;
 
-// ═══════════════════════════════════════════════════════
-// Label size per workspace
-// ═══════════════════════════════════════════════════════
-
-function renderLabelSizes(workspaces) {
   const shopWorkspaces = (workspaces || []).filter(ws => ws.workspace.hasShop && ws.enabled);
   const formats = currentState?.printerLabelFormats || {};
   const assignments = currentState?.printerAssignments || {};
 
-  // Show detected format for the assigned product_label printer
   const assignedPrinter = assignments.product_label;
   const detectedFmt = assignedPrinter ? formats[assignedPrinter] : null;
 
   if (shopWorkspaces.length === 0) {
-    $labelSizeList.innerHTML = '<div class="empty-state">Activez une boutique pour configurer le format</div>';
+    container.innerHTML = '<div class="empty-state" style="padding:12px">Activez une boutique pour configurer le format</div>';
     return;
   }
 
-  // Detected format info
+  // Detected format info badge
   const detectedInfo = detectedFmt
     ? `<div class="detected-format-info">
         <span class="badge badge-detected">📡 Format détecté : ${detectedFmt.widthMm} × ${detectedFmt.heightMm} mm</span>
       </div>`
     : '';
 
-  // Determine if we need a dynamic size (detected or from saved config)
   const detectedSize = detectedFmt ? detectedFmt.widthMm + 'x' + detectedFmt.heightMm : null;
   const configSizes = shopWorkspaces.map(ws => ws.config?.productLabelSize).filter(Boolean);
   const extraSize = detectedSize || configSizes.find(s => !LABEL_SIZE_OPTIONS.find(o => o.value === s)) || null;
   const sizeOptions = buildSizeOptions(extraSize);
 
-  $labelSizeList.innerHTML = detectedInfo + shopWorkspaces.map(ws => {
+  container.innerHTML = detectedInfo + shopWorkspaces.map(ws => {
     const currentSize = ws.config?.productLabelSize || '57x32';
     return `
       <div class="assignment-item">
@@ -446,108 +434,101 @@ function renderLabelSizes(workspaces) {
     `;
   }).join('');
 
-  // Set current values and bind change events
-  $labelSizeList.querySelectorAll('select').forEach(el => {
+  // Set values and bind events
+  container.querySelectorAll('select').forEach(el => {
     const wsId = el.dataset.wsLabelSize;
     const ws = shopWorkspaces.find(w => w.workspace.id === wsId);
 
-    // If printer has a detected format, use it; otherwise use saved config
     if (detectedFmt) {
-      const detectedSize = detectedFmt.widthMm + 'x' + detectedFmt.heightMm;
-      // Add detected option if not in the list
-      const existing = Array.from(el.options).find(o => o.value === detectedSize);
+      const ds = detectedFmt.widthMm + 'x' + detectedFmt.heightMm;
+      const existing = Array.from(el.options).find(o => o.value === ds);
       if (!existing) {
         const opt = document.createElement('option');
-        opt.value = detectedSize;
+        opt.value = ds;
         opt.textContent = detectedFmt.widthMm + ' × ' + detectedFmt.heightMm + ' mm — Détecté (RFID)';
         el.appendChild(opt);
       }
-      el.value = detectedSize;
+      el.value = ds;
     } else {
       el.value = ws?.config?.productLabelSize || '57x32';
     }
 
     el.addEventListener('change', (e) => {
       api.updateWorkspaceConfig(wsId, { productLabelSize: e.target.value });
-      loadLabelPreview(e.target.value);
+      loadJobPreview('product_label', e.target.value);
     });
   });
 
-  // Load preview with detected format or first workspace's config
+  // Load preview
   const previewSize = detectedFmt
     ? detectedFmt.widthMm + 'x' + detectedFmt.heightMm
     : shopWorkspaces[0]?.config?.productLabelSize || '57x32';
-  loadLabelPreview(previewSize);
+  loadJobPreview('product_label', previewSize);
 }
 
 /**
- * Load and display a label preview for the given label size.
+ * Load and display a label preview for the given job type and label size.
  */
-async function loadLabelPreview(labelSize) {
-  if (!api || !$labelPreviewSection || !$labelPreviewImg) return;
+async function loadJobPreview(jobType, labelSize) {
+  const section = document.getElementById(`job-preview-${jobType}`);
+  const img = document.getElementById(`job-preview-img-${jobType}`);
+  if (!api || !section || !img) return;
   try {
-    $labelPreviewSection.style.display = '';
-    $labelPreviewImg.alt = 'Chargement...';
+    section.style.display = '';
+    img.alt = 'Chargement...';
     const dataUri = await api.previewLabel(labelSize);
     if (dataUri) {
-      $labelPreviewImg.src = dataUri;
-      $labelPreviewImg.alt = 'Aperçu étiquette ' + labelSize;
+      img.src = dataUri;
+      img.alt = 'Aperçu étiquette ' + labelSize;
     }
   } catch (err) {
     console.error('[Renderer] Preview error:', err);
-    $labelPreviewImg.alt = 'Erreur de chargement';
+    img.alt = 'Erreur de chargement';
   }
 }
 
 /**
  * Update the label size dropdown when RFID auto-detects a label.
- * If the detected size matches a known option, select it.
- * If not, add it as a custom option.
  */
 function updateDetectedLabelSize(sizeStr, detectedLabel) {
-  if (!$labelSizeList) return;
-  const selects = $labelSizeList.querySelectorAll('select');
+  const container = document.getElementById('job-label-size-product_label');
+  if (!container) return;
+  const selects = container.querySelectorAll('select');
   selects.forEach(el => {
-    // Check if the size exists in the dropdown
     const existing = Array.from(el.options).find(o => o.value === sizeStr);
     if (existing) {
       el.value = sizeStr;
     } else {
-      // Add a custom option for the detected size
       const opt = document.createElement('option');
       opt.value = sizeStr;
       opt.textContent = detectedLabel.widthMm + ' × ' + detectedLabel.heightMm + ' mm — Détecté (RFID)';
       el.appendChild(opt);
       el.value = sizeStr;
     }
-    // Persist to workspace config
     const wsId = el.dataset.wsLabelSize;
     if (wsId) {
       api.updateWorkspaceConfig(wsId, { productLabelSize: sizeStr });
     }
-    loadLabelPreview(sizeStr);
+    loadJobPreview('product_label', sizeStr);
   });
 
-  // Update the detected format badge in renderLabelSizes section
-  const existingBadge = $labelSizeList.querySelector('.detected-format-info');
+  // Update detected badge
+  const existingBadge = container.querySelector('.detected-format-info');
   const newBadge = `<div class="detected-format-info">
     <span class="badge badge-detected">📡 Format détecté : ${detectedLabel.widthMm} × ${detectedLabel.heightMm} mm</span>
   </div>`;
   if (existingBadge) {
     existingBadge.outerHTML = newBadge;
   } else {
-    $labelSizeList.insertAdjacentHTML('afterbegin', newBadge);
+    container.insertAdjacentHTML('afterbegin', newBadge);
   }
   console.log('[Renderer] Label size updated from RFID: ' + sizeStr);
 }
 
 /**
- * Show a notification in the printer section after detection.
- * Success: explains what was detected and that the user can change it.
- * Error: tells the user what went wrong.
+ * Show a detection notification near the product_label panel.
  */
 function showDetectNotification(success, detectedLabel, errorMsg) {
-  // Remove any previous notification
   const existing = document.querySelector('.detect-notification');
   if (existing) existing.remove();
 
@@ -575,14 +556,14 @@ function showDetectNotification(success, detectedLabel, errorMsg) {
       </div>`;
   }
 
-  // Insert notification near the label size section
-  if ($labelSizeList) {
-    $labelSizeList.insertAdjacentHTML('beforebegin', html);
-  } else if ($printerList) {
-    $printerList.insertAdjacentHTML('afterend', html);
+  const container = document.getElementById('job-label-size-product_label');
+  if (container) {
+    container.insertAdjacentHTML('beforebegin', html);
+  } else {
+    const printerList = document.getElementById('printer-list');
+    if (printerList) printerList.insertAdjacentHTML('afterend', html);
   }
 
-  // Auto-dismiss after 15 seconds
   setTimeout(() => {
     const notif = document.querySelector('.detect-notification');
     if (notif) {
@@ -749,6 +730,19 @@ document.querySelectorAll('.tab').forEach(tab => {
       panel.classList.remove('hidden');
       panel.classList.add('active');
     }
+  });
+});
+
+// Sub-tab navigation (job type config panels)
+document.querySelectorAll('.sub-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const parent = tab.closest('.section');
+    if (!parent) return;
+    parent.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+    parent.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    const panel = document.getElementById(`jobpanel-${tab.dataset.jobtab}`);
+    if (panel) panel.classList.add('active');
   });
 });
 

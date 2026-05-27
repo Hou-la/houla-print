@@ -92,28 +92,119 @@
           </div>
         </div>
 
-        <!-- Printer assignments -->
+        <!-- Printer assignments — tabbed by job type -->
         <div class="section">
-          <h3>Attribution des tâches</h3>
-          <div class="assignment-list" id="assignment-list"></div>
-        </div>
+          <h3>Configuration des impressions</h3>
+          <p class="section-hint">Chaque type d'impression se déclenche automatiquement lorsqu'une vente est réalisée (live, marketplace, gachapon). Configurez l'imprimante, le format et consultez l'aperçu pour chaque type.</p>
 
-        <!-- Label size per workspace -->
-        <div class="section">
-          <h3>Format d'étiquette</h3>
-          <p class="section-hint">Sélectionnez le format correspondant aux étiquettes chargées dans votre imprimante. Utilisez le bouton « Détecter étiquette » ci-dessus pour une détection automatique.</p>
-          <div class="label-size-list" id="label-size-list"></div>
-        </div>
+          <nav class="sub-tabs">
+            <button class="sub-tab active" data-jobtab="product_label">Étiquettes produits</button>
+            <button class="sub-tab" data-jobtab="shipping_label">Étiquette expédition</button>
+            <button class="sub-tab" data-jobtab="order_summary">Récapitulatif</button>
+            <button class="sub-tab" data-jobtab="invoice">Facture</button>
+          </nav>
 
-        <!-- Label preview -->
-        <div class="section" id="section-label-preview" style="display:none">
-          <h3>Aperçu de l'étiquette</h3>
-          <div class="label-preview" id="label-preview">
-            <div class="label-preview-img-wrap">
-              <img id="label-preview-img" alt="Aperçu étiquette">
+          <!-- Sub-panel: Product labels -->
+          <div class="sub-panel active" id="jobpanel-product_label">
+            <div class="job-description">
+              <span class="job-icon">🏷️</span>
+              <div>
+                <strong>Étiquettes produits</strong>
+                <p>Imprimées automatiquement à chaque vente. Chaque article de la commande génère une étiquette avec le nom du produit, la variante, le prix, le nom du client et un QR code. Idéal pour identifier les colis avant expédition.</p>
+              </div>
             </div>
-            <div class="label-preview-hint">Données fictives — rendu réel identique</div>
+            <div class="job-config">
+              <div class="config-row">
+                <label>Imprimante</label>
+                <select class="assignment-select" data-job-assign="product_label">
+                  <option value="">Non assignée</option>
+                </select>
+              </div>
+              <div class="config-row">
+                <label>Format d'étiquette</label>
+                <div id="job-label-size-product_label" class="label-size-list"></div>
+              </div>
+              <div class="config-row config-preview">
+                <label>Aperçu</label>
+                <div class="label-preview" id="job-preview-product_label" style="display:none">
+                  <div class="label-preview-img-wrap">
+                    <img id="job-preview-img-product_label" alt="Aperçu étiquette produit">
+                  </div>
+                  <div class="label-preview-hint">Données fictives — rendu réel identique</div>
+                </div>
+              </div>
+            </div>
           </div>
+
+          <!-- Sub-panel: Shipping labels -->
+          <div class="sub-panel" id="jobpanel-shipping_label">
+            <div class="job-description">
+              <span class="job-icon">📦</span>
+              <div>
+                <strong>Étiquette d'expédition</strong>
+                <p>Imprimée automatiquement lorsque la commande passe en « Préparation ». Contient l'adresse du client et les informations transporteur. Format standard 100×150 mm (6×4").</p>
+              </div>
+            </div>
+            <div class="job-config">
+              <div class="config-row">
+                <label>Imprimante</label>
+                <select class="assignment-select" data-job-assign="shipping_label">
+                  <option value="">Non assignée</option>
+                </select>
+              </div>
+              <div class="config-row">
+                <label>Format</label>
+                <span class="config-value">100 × 150 mm (A6 / 6×4") — Standard expédition</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sub-panel: Order summary -->
+          <div class="sub-panel" id="jobpanel-order_summary">
+            <div class="job-description">
+              <span class="job-icon">🧾</span>
+              <div>
+                <strong>Récapitulatif de commande</strong>
+                <p>Imprimé automatiquement dès qu'une commande est payée. Récapitule tous les articles, les prix, le total et les informations du client. Imprimé sur ticket thermique (ESC/POS) ou en PDF selon l'imprimante assignée.</p>
+              </div>
+            </div>
+            <div class="job-config">
+              <div class="config-row">
+                <label>Imprimante</label>
+                <select class="assignment-select" data-job-assign="order_summary">
+                  <option value="">Non assignée</option>
+                </select>
+              </div>
+              <div class="config-row">
+                <label>Format</label>
+                <span class="config-value">Ticket 80 mm ou PDF A4 — selon l'imprimante</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sub-panel: Invoice -->
+          <div class="sub-panel" id="jobpanel-invoice">
+            <div class="job-description">
+              <span class="job-icon">📄</span>
+              <div>
+                <strong>Facture</strong>
+                <p>Imprimée automatiquement selon votre configuration (au paiement ou à la préparation). Générée en PDF avec vos informations légales, les détails de la commande et les montants TTC. Configurez le déclencheur dans les paramètres de votre boutique sur Hou.la.</p>
+              </div>
+            </div>
+            <div class="job-config">
+              <div class="config-row">
+                <label>Imprimante</label>
+                <select class="assignment-select" data-job-assign="invoice">
+                  <option value="">Non assignée</option>
+                </select>
+              </div>
+              <div class="config-row">
+                <label>Format</label>
+                <span class="config-value">PDF A4 — imprimé sur imprimante standard</span>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
 
