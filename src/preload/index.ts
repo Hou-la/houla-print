@@ -38,6 +38,10 @@ contextBridge.exposeInMainWorld('houlaPrint', {
     ipcRenderer.invoke(IPC.PRINTER_DETECT, printerName),
   previewLabel: (labelSize: string) =>
     ipcRenderer.invoke(IPC.PRINTER_PREVIEW, labelSize),
+  setPrinterZplConfig: (printerName: string, config: any) =>
+    ipcRenderer.invoke(IPC.PRINTER_SET_ZPL_CONFIG, printerName, config),
+  getPrinterZplConfig: (printerName: string) =>
+    ipcRenderer.invoke(IPC.PRINTER_GET_ZPL_CONFIG, printerName),
 
   // Queue
   getQueueStats: () => ipcRenderer.invoke(IPC.QUEUE_STATS),

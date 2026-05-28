@@ -530,6 +530,83 @@ body {
    Settings
    ═══════════════════════════════════════════════════════ */
 
+/* ─── ZPL Advanced Config ─── */
+
+.zpl-config-section {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.zpl-config-toggle {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+.zpl-config-toggle:hover {
+  color: var(--text);
+}
+
+.zpl-config-body {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.zpl-config-body .config-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.zpl-config-body select {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  max-width: 280px;
+  flex: 1;
+}
+
+.scale-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  max-width: 280px;
+}
+.scale-control input[type="range"] {
+  flex: 1;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+.scale-value {
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 36px;
+  text-align: right;
+  color: var(--text);
+}
+
+.config-hint small {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.config-actions {
+  justify-content: flex-end !important;
+  gap: 8px;
+}
+
 .settings-list {
   display: flex;
   flex-direction: column;

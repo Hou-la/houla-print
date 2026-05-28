@@ -1,5 +1,5 @@
 import { BrowserWindow, Notification } from 'electron';
-import { PrinterInfo } from '../../shared/types';
+import { PrinterInfo, PrinterZplConfig, DEFAULT_ZPL_CONFIG } from '../../shared/types';
 import { NiimbotService, NiimbotDeviceInfo, renderProductLabel, LabelContent } from './niimbot';
 import { DEFAULT_MODEL, NIIMBOT_MODELS, NiimbotModelSpec } from './niimbot/niimbot-protocol';
 
@@ -26,6 +26,8 @@ const MOCK_LABEL_CONTENT: LabelContent = {
 
 // Zebra / thermal printer name patterns
 const THERMAL_PATTERNS = [/zebra/i, /zd[24]\d{2}/i, /gk4\d{2}/i, /gx4\d{2}/i, /zt[24]\d{2}/i, /brother\s*ql/i, /dymo/i];
+// ZPL-capable printers (Zebra only — Brother/Dymo do NOT speak ZPL)
+const ZPL_PATTERNS = [/zebra/i, /zd[24]\d{2}/i, /gk4\d{2}/i, /gx4\d{2}/i, /zt[24]\d{2}/i, /105sl/i];
 // Receipt printer patterns
 const RECEIPT_PATTERNS = [/epson\s*tm/i, /star\s*(tsp|sp)/i, /bixolon/i, /citizen\s*ct/i, /pos[-\s]?58/i, /pos[-\s]?80/i];
 // Niimbot patterns (matched against OS printer names)
@@ -143,39 +145,251 @@ export class PrinterService {
   }
 
   /**
-   * Print PDF file to a standard printer.
+   * Print PDF file to a label printer.
+   * For ZPL-capable printers (Zebra), bypasses the Windows driver entirely
+   * and sends the label as a raw ZPL ^GFA graphic command.
+   * For other printers, falls back to Chromium print engine.
    */
-  async printPdf(printerName: string, pdfBuffer: Buffer): Promise<void> {
+  async printPdf(printerName: string, pdfBuffer: Buffer, zplConfig?: PrinterZplConfig): Promise<void> {
     const fs = await import('fs/promises');
     const os = await import('os');
-    const path = await import('path');
 
-    const tmpFile = path.join(os.tmpdir(), `houla-print-${Date.now()}.pdf`);
-
-    // Save a debug copy so we can inspect what was sent to the printer
-    const debugFile = path.join(os.homedir(), 'Desktop', `houla-label-debug.pdf`);
+    // Save a debug copy on Desktop
+    const debugFile = require('path').join(os.homedir(), 'Desktop', `houla-label-debug.pdf`);
     await fs.writeFile(debugFile, pdfBuffer).catch(() => {});
     console.log(`[PrinterService] Debug PDF saved to: ${debugFile} (${pdfBuffer.length} bytes)`);
 
-    // Open in default viewer so user can inspect
-    const { exec: execCb } = await import('child_process');
-    execCb(`start "" "${debugFile}"`);
+    const config = zplConfig || DEFAULT_ZPL_CONFIG;
+    const useZpl = config.mode === 'zpl'
+      || (config.mode === 'auto' && ZPL_PATTERNS.some(p => p.test(printerName)));
+    const useDriver = config.mode === 'driver';
 
-    try {
-      await fs.writeFile(tmpFile, pdfBuffer);
-
-      if (process.platform === 'win32') {
-        const { print } = await import('pdf-to-printer');
-        await print(tmpFile, { printer: printerName, scale: 'fit' });
-      } else {
-        const { exec } = await import('child_process');
-        const { promisify } = await import('util');
-        const execAsync = promisify(exec);
-        await execAsync(`lp -d "${printerName}" "${tmpFile}"`);
-      }
-    } finally {
-      await fs.unlink(tmpFile).catch(() => {});
+    if (useZpl && !useDriver) {
+      console.log(`[PrinterService] ZPL mode (${config.mode}) — using raw ZPL graphic mode (DPI=${config.dpi}, scale=${config.scale})`);
+      await this.printPdfAsZpl(printerName, pdfBuffer, config);
+    } else {
+      await this.printPdfViaElectron(printerName, pdfBuffer);
     }
+  }
+
+  /**
+   * Render PDF to canvas via pdf.js in a hidden BrowserWindow, then print.
+   */
+  private async printPdfViaElectron(printerName: string, pdfBuffer: Buffer): Promise<void> {
+    const path = require('path');
+
+    // Build file:// URLs to pdf.js ESM modules
+    const pdfjsPath = path.join(__dirname, '..', '..', '..', 'node_modules', 'pdfjs-dist', 'build', 'pdf.mjs');
+    const pdfjsUrl = `file:///${pdfjsPath.replace(/\\/g, '/')}`;
+    const workerPath = path.join(__dirname, '..', '..', '..', 'node_modules', 'pdfjs-dist', 'build', 'pdf.worker.mjs');
+    const workerUrl = `file:///${workerPath.replace(/\\/g, '/')}`;
+    const pdfBase64 = pdfBuffer.toString('base64');
+
+    const win = new BrowserWindow({
+      show: false,
+      width: 400,
+      height: 600,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: false,
+      },
+    });
+
+    // Load print-pdf.html from file (file:// origin allows import of file:// modules)
+    const htmlPath = path.join(__dirname, '..', '..', 'renderer', 'print-pdf.html');
+    console.log(`[PrinterService] Loading print HTML from: ${htmlPath}`);
+    await win.loadFile(htmlPath);
+
+    // Render the PDF via pdf.js using dynamic import
+    const renderResult: string = await win.webContents.executeJavaScript(`
+      (async () => {
+        try {
+          const pdfjsLib = await import('${pdfjsUrl}');
+          pdfjsLib.GlobalWorkerOptions.workerSrc = '${workerUrl}';
+
+          const pdfData = Uint8Array.from(atob('${pdfBase64}'), c => c.charCodeAt(0));
+          const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+          const page = await pdf.getPage(1);
+
+          const scale = 300 / 72; // 300 DPI
+          const viewport = page.getViewport({ scale });
+
+          const canvas = document.getElementById('c');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport }).promise;
+
+          return 'OK:' + viewport.width + 'x' + viewport.height;
+        } catch (e) {
+          return 'ERR:' + e.message;
+        }
+      })()
+    `);
+
+    console.log(`[PrinterService] PDF render result: ${renderResult}`);
+
+    if (renderResult.startsWith('ERR:')) {
+      win.close();
+      throw new Error(`PDF render failed: ${renderResult}`);
+    }
+
+    // Now print the canvas
+    return new Promise((resolve, reject) => {
+      win.webContents.print(
+        {
+          silent: true,
+          printBackground: true,
+          deviceName: printerName,
+          pageSize: { width: 100000, height: 150000 }, // 100mm x 150mm in microns
+          margins: { marginType: 'none' },
+        },
+        (success, failureReason) => {
+          win.close();
+          if (success) {
+            console.log(`[PrinterService] Print success to ${printerName}`);
+            resolve();
+          } else {
+            console.error(`[PrinterService] Print failed: ${failureReason}`);
+            reject(new Error(`Print failed: ${failureReason}`));
+          }
+        },
+      );
+    });
+  }
+
+  /**
+   * Render PDF to a monochrome bitmap via pdf.js, convert to ZPL ^GFA graphic,
+   * and send as raw data to the printer — bypasses Windows driver entirely.
+   * Uses 203 DPI (standard for most thermal label printers like MHT, Xprinter, etc.)
+   */
+  private async printPdfAsZpl(printerName: string, pdfBuffer: Buffer, config: PrinterZplConfig): Promise<void> {
+    const path = require('path');
+    const fs = require('fs/promises');
+    const os = require('os');
+
+    const printerDpi = config.dpi;
+    const fitScale = config.scale;
+
+    const pdfjsPath = path.join(__dirname, '..', '..', '..', 'node_modules', 'pdfjs-dist', 'build', 'pdf.mjs');
+    const pdfjsUrl = `file:///${pdfjsPath.replace(/\\/g, '/')}`;
+    const workerPath = path.join(__dirname, '..', '..', '..', 'node_modules', 'pdfjs-dist', 'build', 'pdf.worker.mjs');
+    const workerUrl = `file:///${workerPath.replace(/\\/g, '/')}`;
+    const pdfBase64 = pdfBuffer.toString('base64');
+
+    const win = new BrowserWindow({
+      show: false,
+      width: 400,
+      height: 600,
+      webPreferences: { nodeIntegration: false, contextIsolation: false },
+    });
+
+    const htmlPath = path.join(__dirname, '..', '..', 'renderer', 'print-pdf.html');
+    await win.loadFile(htmlPath);
+
+    // Render PDF at printer DPI and convert to monochrome hex
+    const result: string = await win.webContents.executeJavaScript(`
+      (async () => {
+        try {
+          const pdfjsLib = await import('${pdfjsUrl}');
+          pdfjsLib.GlobalWorkerOptions.workerSrc = '${workerUrl}';
+
+          const pdfData = Uint8Array.from(atob('${pdfBase64}'), c => c.charCodeAt(0));
+          const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+          const page = await pdf.getPage(1);
+
+          const scale = ${printerDpi} / 72 * ${fitScale};
+          const viewport = page.getViewport({ scale });
+
+          const canvas = document.getElementById('c');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext('2d');
+
+          // White background
+          ctx.fillStyle = 'white';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          await page.render({ canvasContext: ctx, viewport }).promise;
+
+          // Save PNG data URL for debugging
+          const pngDataUrl = canvas.toDataURL('image/png');
+
+          // Convert to 1-bit monochrome, packed as bytes
+          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const w = canvas.width;
+          const h = canvas.height;
+          const bytesPerRow = Math.ceil(w / 8);
+          const totalBytes = bytesPerRow * h;
+          const mono = new Uint8Array(totalBytes);
+
+          for (let y = 0; y < h; y++) {
+            const rowOff = y * bytesPerRow;
+            for (let byteIdx = 0; byteIdx < bytesPerRow; byteIdx++) {
+              let b = 0;
+              for (let bit = 0; bit < 8; bit++) {
+                const x = byteIdx * 8 + bit;
+                if (x < w) {
+                  const px = (y * w + x) * 4;
+                  const gray = 0.299 * imgData.data[px] + 0.587 * imgData.data[px+1] + 0.114 * imgData.data[px+2];
+                  if (gray < 128) b |= (0x80 >> bit); // ZPL: 1=black
+                }
+              }
+              mono[rowOff + byteIdx] = b;
+            }
+          }
+
+          // Convert to hex string
+          const hexChars = '0123456789ABCDEF';
+          let hex = '';
+          for (let i = 0; i < mono.length; i++) {
+            hex += hexChars[mono[i] >> 4] + hexChars[mono[i] & 0x0F];
+          }
+
+          // Return PNG separately (pipe-delimited) for debug save
+          return 'OK:' + w + ':' + h + ':' + bytesPerRow + ':' + hex + '|' + pngDataUrl;
+        } catch (e) {
+          return 'ERR:' + e.message;
+        }
+      })()
+    `);
+
+    win.close();
+
+    if (result.startsWith('ERR:')) {
+      throw new Error(`PDF ZPL render failed: ${result}`);
+    }
+
+    // Split hex data from PNG data URL
+    const pipeIdx = result.lastIndexOf('|');
+    const zplPart = result.substring(0, pipeIdx);
+    const pngDataUrl = result.substring(pipeIdx + 1);
+
+    // Save debug PNG to Desktop
+    try {
+      const pngBase64 = pngDataUrl.replace(/^data:image\/png;base64,/, '');
+      const pngPath = path.join(os.homedir(), 'Desktop', 'houla-label-debug.png');
+      await fs.writeFile(pngPath, Buffer.from(pngBase64, 'base64'));
+      console.log(`[PrinterService] Debug PNG saved to: ${pngPath}`);
+    } catch (e) { /* ignore debug save errors */ }
+
+    // Parse: OK:width:height:bytesPerRow:hexdata
+    const colonIdx1 = zplPart.indexOf(':', 3);
+    const colonIdx2 = zplPart.indexOf(':', colonIdx1 + 1);
+    const colonIdx3 = zplPart.indexOf(':', colonIdx2 + 1);
+    const width = parseInt(zplPart.substring(3, colonIdx1));
+    const height = parseInt(zplPart.substring(colonIdx1 + 1, colonIdx2));
+    const bytesPerRow = parseInt(zplPart.substring(colonIdx2 + 1, colonIdx3));
+    const hexData = zplPart.substring(colonIdx3 + 1);
+    const totalBytes = bytesPerRow * height;
+
+    console.log(`[PrinterService] ZPL graphic: ${width}x${height}px, ${bytesPerRow} bytes/row, ${totalBytes} total, ${hexData.length} hex chars`);
+
+    // Build ZPL — no newlines in the stream, ^FS to close the graphic field
+    const zpl = `^XA^CI28^PON^LH0,0^LL${height}^PW${width}^FO0,0^GFA,${totalBytes},${totalBytes},${bytesPerRow},${hexData}^FS^XZ`;
+
+    console.log(`[PrinterService] Sending ZPL to ${printerName} (${zpl.length} chars)`);
+    await this.printZpl(printerName, zpl);
+    console.log(`[PrinterService] ZPL print success to ${printerName}`);
   }
 
   /**
@@ -193,7 +407,7 @@ export class PrinterService {
   /**
    * Send a test page to verify the printer works.
    */
-  async testPrint(printerName: string): Promise<{ success: boolean; error?: string }> {
+  async testPrint(printerName: string, zplConfig?: PrinterZplConfig): Promise<{ success: boolean; error?: string }> {
     const printer = this.detectedPrinters.find(p => p.name === printerName);
     if (!printer) return { success: false, error: 'Imprimante non trouvée' };
 
@@ -201,14 +415,25 @@ export class PrinterService {
       if (printer.type === 'niimbot') {
         return await this.testPrintNiimbot(printerName);
       } else if (printer.type === 'thermal') {
-        // ZPL test label
-        const testZpl = `^XA
+        // Use the full PDF→ZPL pipeline if ZPL config indicates ZPL mode
+        const config = zplConfig || DEFAULT_ZPL_CONFIG;
+        const useZpl = config.mode === 'zpl'
+          || (config.mode === 'auto' && ZPL_PATTERNS.some(p => p.test(printerName)));
+
+        if (useZpl && config.mode !== 'driver') {
+          // Generate a test PDF (100×150mm shipping label) and print via ZPL pipeline
+          const testPdf = this.generateTestShippingLabelPdf();
+          await this.printPdfAsZpl(printerName, testPdf, config);
+        } else {
+          // Simple ZPL text test
+          const testZpl = `^XA
 ^FO20,20^A0N,40,40^FDHou.la Print^FS
 ^FO20,70^A0N,25,25^FDTest impression^FS
 ^FO20,100^A0N,20,20^FD${new Date().toLocaleString('fr-FR')}^FS
 ^FO20,140^BY2^BCN,60,Y,N,N^FD1234567890^FS
 ^XZ`;
-        await this.printZpl(printerName, testZpl);
+          await this.printZpl(printerName, testZpl);
+        }
       } else if (printer.type === 'receipt') {
         // ESC/POS test receipt
         const testEscPos = [
@@ -425,6 +650,96 @@ export class PrinterService {
   // ═══════════════════════════════════════════════════════
   // Raw printing — platform specific
   // ═══════════════════════════════════════════════════════
+
+  /**
+  /**
+   * Generate a minimal PDF that looks like a 100×150mm shipping label.
+   * Uses raw PDF operators (no external library) to draw text and a barcode.
+   */
+  private generateTestShippingLabelPdf(): Buffer {
+    const now = new Date().toLocaleString('fr-FR');
+    // Page size: 100×150mm = 283.465×425.197 points
+    const w = 283.465;
+    const h = 425.197;
+
+    const stream = [
+      // White background
+      `1 1 1 rg`,
+      `0 0 ${w} ${h} re f`,
+      // Black text
+      `0 0 0 rg`,
+      // Title
+      `BT /F1 18 Tf 30 ${h - 40} Td (Hou.la Print) Tj ET`,
+      `BT /F1 12 Tf 30 ${h - 60} Td (Test etiquette expedition) Tj ET`,
+      `BT /F1 10 Tf 30 ${h - 80} Td (${now}) Tj ET`,
+      // Separator line
+      `0.5 w 20 ${h - 95} m ${w - 20} ${h - 95} l S`,
+      // From address
+      `BT /F1 9 Tf 30 ${h - 115} Td (DE:) Tj ET`,
+      `BT /F1 9 Tf 60 ${h - 115} Td (Ma Boutique) Tj ET`,
+      `BT /F1 9 Tf 60 ${h - 130} Td (123 Rue du Commerce) Tj ET`,
+      `BT /F1 9 Tf 60 ${h - 145} Td (75001 Paris, France) Tj ET`,
+      // Separator
+      `0.3 w 20 ${h - 160} m ${w - 20} ${h - 160} l S`,
+      // To address (bigger)
+      `BT /F1 10 Tf 30 ${h - 180} Td (A:) Tj ET`,
+      `BT /F1 14 Tf 60 ${h - 180} Td (Jean Dupont) Tj ET`,
+      `BT /F1 12 Tf 60 ${h - 200} Td (456 Avenue des Tests) Tj ET`,
+      `BT /F1 12 Tf 60 ${h - 218} Td (69001 Lyon, France) Tj ET`,
+      // Separator
+      `0.5 w 20 ${h - 238} m ${w - 20} ${h - 238} l S`,
+      // Carrier
+      `BT /F1 11 Tf 30 ${h - 258} Td (Transporteur: Colissimo) Tj ET`,
+      `BT /F1 11 Tf 30 ${h - 278} Td (N suivi: 6X12345678901) Tj ET`,
+      // Large barcode-like rectangle pattern
+      `0 0 0 rg`,
+      ...Array.from({ length: 40 }, (_, i) => {
+        const x = 40 + i * 5;
+        const bw = (i % 3 === 0) ? 3 : ((i % 2 === 0) ? 2 : 1);
+        return `${x} ${h - 370} ${bw} 60 re f`;
+      }),
+      // Barcode number
+      `BT /F1 10 Tf 60 ${h - 385} Td (6X12345678901) Tj ET`,
+      // Footer
+      `BT /F1 8 Tf 30 20 Td (Imprime via Hou.la Print - Test) Tj ET`,
+    ].join('\n');
+
+    const streamBytes = Buffer.from(stream, 'latin1');
+
+    const pdf = [
+      `%PDF-1.4`,
+      `1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj`,
+      `2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj`,
+      `3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 ${w} ${h}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj`,
+      `4 0 obj << /Length ${streamBytes.length} >> stream\n${stream}\nendstream endobj`,
+      `5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj`,
+    ].join('\n');
+
+    // Build xref table
+    const lines = pdf.split('\n');
+    const offsets: number[] = [];
+    let pos = 0;
+    for (const line of lines) {
+      if (line.match(/^\d+ 0 obj/)) offsets.push(pos);
+      pos += Buffer.byteLength(line, 'latin1') + 1;
+    }
+    const xrefStart = pos;
+    const xref = [
+      `xref`,
+      `0 ${offsets.length + 1}`,
+      `0000000000 65535 f `,
+      ...offsets.map(o => `${String(o).padStart(10, '0')} 00000 n `),
+    ].join('\n');
+
+    const trailer = [
+      `trailer << /Size ${offsets.length + 1} /Root 1 0 R >>`,
+      `startxref`,
+      `${xrefStart}`,
+      `%%EOF`,
+    ].join('\n');
+
+    return Buffer.from(`${pdf}\n${xref}\n${trailer}`, 'latin1');
+  }
 
   /**
    * Windows: Send raw data to printer via .NET RawPrinterHelper (Win32 spooler API).

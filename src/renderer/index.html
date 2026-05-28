@@ -156,6 +156,44 @@
                 <label>Format</label>
                 <span class="config-value">100 × 150 mm (A6 / 6×4") — Standard expédition</span>
               </div>
+
+              <!-- Advanced ZPL config (shown when a thermal printer is assigned) -->
+              <div class="zpl-config-section hidden" id="zpl-config-section">
+                <button class="btn btn-sm btn-ghost zpl-config-toggle" id="btn-zpl-config-toggle">
+                  ⚙️ Configuration avancée ▸
+                </button>
+                <div class="zpl-config-body hidden" id="zpl-config-body">
+                  <div class="config-row">
+                    <label>Mode d'impression</label>
+                    <select id="zpl-config-mode">
+                      <option value="auto">Auto (détection par nom)</option>
+                      <option value="zpl">ZPL direct (raw)</option>
+                      <option value="driver">Driver Windows</option>
+                    </select>
+                  </div>
+                  <div class="config-row">
+                    <label>Résolution (DPI)</label>
+                    <select id="zpl-config-dpi">
+                      <option value="203">203 DPI — Standard (MHT, Xprinter, budget)</option>
+                      <option value="300">300 DPI — Zebra industrielle</option>
+                    </select>
+                  </div>
+                  <div class="config-row">
+                    <label>Échelle</label>
+                    <div class="scale-control">
+                      <input type="range" id="zpl-config-scale" min="0.70" max="1.00" step="0.01" value="0.90">
+                      <span id="zpl-config-scale-value" class="scale-value">90%</span>
+                    </div>
+                  </div>
+                  <div class="config-row config-hint">
+                    <small>💡 Ajustez l'échelle si l'étiquette est coupée sur les bords. 90% convient à la plupart des imprimantes.</small>
+                  </div>
+                  <div class="config-row config-actions">
+                    <button class="btn btn-sm btn-primary" id="btn-zpl-config-save">Enregistrer</button>
+                    <button class="btn btn-sm btn-ghost" id="btn-zpl-test-print">🖨️ Impression test</button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 

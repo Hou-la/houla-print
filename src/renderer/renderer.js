@@ -384,11 +384,121 @@ function renderJobConfigs(assignments, printers, workspaces) {
           loadJobPreview('product_label', fmt.widthMm + 'x' + fmt.heightMm);
         }
       }
+      // For shipping_label, show/hide ZPL config
+      if (type === 'shipping_label') {
+        renderShippingZplConfig(e.target.value || null);
+      }
     });
   });
 
   // Render product_label label size selector
   renderProductLabelSizes(workspaces);
+
+  // Render shipping label ZPL config
+  const shippingPrinter = assignments?.shipping_label || null;
+  renderShippingZplConfig(shippingPrinter);
+}
+
+/**
+ * Show/hide the advanced ZPL config section for shipping labels.
+ * Loads saved config from the store when a printer is assigned.
+ */
+function renderShippingZplConfig(printerName) {
+  const section = document.getElementById('zpl-config-section');
+  const body = document.getElementById('zpl-config-body');
+  if (!section) return;
+
+  // Only show when a thermal printer is assigned
+  if (!printerName) {
+    section.classList.add('hidden');
+    return;
+  }
+
+  // Show the section
+  section.classList.remove('hidden');
+
+  // Load saved config from state
+  const configs = currentState?.printerZplConfigs || {};
+  const config = configs[printerName] || { mode: 'auto', dpi: 203, scale: 0.90 };
+
+  // Set values
+  const modeEl = document.getElementById('zpl-config-mode');
+  const dpiEl = document.getElementById('zpl-config-dpi');
+  const scaleEl = document.getElementById('zpl-config-scale');
+  const scaleValueEl = document.getElementById('zpl-config-scale-value');
+
+  if (modeEl) modeEl.value = config.mode;
+  if (dpiEl) dpiEl.value = String(config.dpi);
+  if (scaleEl) scaleEl.value = String(config.scale);
+  if (scaleValueEl) scaleValueEl.textContent = Math.round(config.scale * 100) + '%';
+}
+
+/**
+ * Initialize ZPL config event listeners (called once at setup).
+ */
+function initZplConfigListeners() {
+  const toggle = document.getElementById('btn-zpl-config-toggle');
+  const body = document.getElementById('zpl-config-body');
+  const scaleEl = document.getElementById('zpl-config-scale');
+  const scaleValueEl = document.getElementById('zpl-config-scale-value');
+  const saveBtn = document.getElementById('btn-zpl-config-save');
+  const testBtn = document.getElementById('btn-zpl-test-print');
+
+  if (toggle && body) {
+    toggle.addEventListener('click', () => {
+      body.classList.toggle('hidden');
+      toggle.textContent = body.classList.contains('hidden')
+        ? '⚙️ Configuration avancée ▸'
+        : '⚙️ Configuration avancée ▾';
+    });
+  }
+
+  if (scaleEl && scaleValueEl) {
+    scaleEl.addEventListener('input', () => {
+      scaleValueEl.textContent = Math.round(scaleEl.value * 100) + '%';
+    });
+  }
+
+  if (saveBtn) {
+    saveBtn.addEventListener('click', async () => {
+      const printerName = currentState?.printerAssignments?.shipping_label;
+      if (!printerName) return;
+
+      const modeEl = document.getElementById('zpl-config-mode');
+      const dpiEl = document.getElementById('zpl-config-dpi');
+      const scaleEl = document.getElementById('zpl-config-scale');
+
+      const config = {
+        mode: modeEl?.value || 'auto',
+        dpi: parseInt(dpiEl?.value || '203'),
+        scale: parseFloat(scaleEl?.value || '0.90'),
+      };
+
+      await api.setPrinterZplConfig(printerName, config);
+      saveBtn.textContent = '✓ Enregistré';
+      setTimeout(() => { saveBtn.textContent = 'Enregistrer'; }, 2000);
+    });
+  }
+
+  if (testBtn) {
+    testBtn.addEventListener('click', async () => {
+      const printerName = currentState?.printerAssignments?.shipping_label;
+      if (!printerName) return;
+
+      testBtn.disabled = true;
+      testBtn.textContent = '⏳ Impression…';
+      try {
+        const result = await api.testPrinter(printerName);
+        testBtn.textContent = result.success ? '✓ Test OK' : '✗ Échec';
+      } catch (err) {
+        testBtn.textContent = '✗ Erreur';
+      }
+      setTimeout(() => {
+        testBtn.disabled = false;
+        testBtn.textContent = '🖨️ Impression test';
+      }, 3000);
+    });
+  }
 }
 
 /**
@@ -792,6 +902,9 @@ bindBtn('btn-open-dashboard', () => {
   const appUrl = currentState?.appUrl || 'https://app.hou.la';
   api.openExternal(`${appUrl}/manager`);
 });
+
+// Init ZPL config listeners (toggle, save, test, scale slider)
+initZplConfigListeners();
 
 // ═══════════════════════════════════════════════════════
 // IPC listener: state updates from main process

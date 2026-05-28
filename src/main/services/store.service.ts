@@ -2,7 +2,7 @@ import Store from 'electron-store';
 import { app, safeStorage } from 'electron';
 import { existsSync, unlinkSync } from 'fs';
 import { join } from 'path';
-import { PrinterAssignments, PrintHistoryEntry, WorkspaceState, PrintJob } from '../../shared/types';
+import { PrinterAssignments, PrintHistoryEntry, WorkspaceState, PrintJob, PrinterZplConfig, DEFAULT_ZPL_CONFIG } from '../../shared/types';
 import { API_URLS, APP_URLS } from '../../shared/config';
 
 interface StoreSchema {
@@ -26,6 +26,9 @@ interface StoreSchema {
 
   // Printer-detected label formats: printerName → { widthMm, heightMm }
   printerLabelFormats: Record<string, { widthMm: number; heightMm: number }>;
+
+  // Per-printer ZPL/thermal config: printerName → { mode, dpi, scale }
+  printerZplConfigs: Record<string, PrinterZplConfig>;
 
   // Print history (persistent, capped at 200 entries)
   printHistory: PrintHistoryEntry[];
@@ -55,6 +58,7 @@ const STORE_DEFAULTS: StoreSchema = {
   printedTodayCount: 0,
   printedTodayDate: new Date().toISOString().split('T')[0],
   printerLabelFormats: {},
+  printerZplConfigs: {},
   printHistory: [],
   failedTodayCount: 0,
   failedTodayDate: new Date().toISOString().split('T')[0],
@@ -218,6 +222,25 @@ export class StoreService {
 
   getAllPrinterLabelFormats(): Record<string, { widthMm: number; heightMm: number }> {
     return this.store.get('printerLabelFormats');
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // Printer ZPL config (per-printer DPI, scale, mode)
+  // ═══════════════════════════════════════════════════════
+
+  getPrinterZplConfig(printerName: string): PrinterZplConfig {
+    const configs = this.store.get('printerZplConfigs');
+    return configs[printerName] || { ...DEFAULT_ZPL_CONFIG };
+  }
+
+  setPrinterZplConfig(printerName: string, config: PrinterZplConfig): void {
+    const configs = this.store.get('printerZplConfigs');
+    configs[printerName] = config;
+    this.store.set('printerZplConfigs', configs);
+  }
+
+  getAllPrinterZplConfigs(): Record<string, PrinterZplConfig> {
+    return this.store.get('printerZplConfigs');
   }
 
   // ═══════════════════════════════════════════════════════

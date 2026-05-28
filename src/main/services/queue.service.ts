@@ -625,11 +625,13 @@ export class QueueService {
         if (job.labelData) {
           // Inline PDF (base64)
           const buffer = Buffer.from(job.labelData, 'base64');
-          await this.printer.printPdf(printerName, buffer);
+          const zplConfig = this.store.getPrinterZplConfig(printerName);
+          await this.printer.printPdf(printerName, buffer, zplConfig);
         } else if (job.labelUrl) {
           // Download PDF from external URL (e.g. Sendcloud label)
           const pdfBuffer = await this.downloadPdfFromUrl(job.labelUrl);
-          await this.printer.printPdf(printerName, pdfBuffer);
+          const zplConfig = this.store.getPrinterZplConfig(printerName);
+          await this.printer.printPdf(printerName, pdfBuffer, zplConfig);
         } else {
           throw new Error('No label data or URL for PDF job');
         }

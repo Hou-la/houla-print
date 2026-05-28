@@ -367,7 +367,8 @@ function registerIpcHandlers(): void {
     broadcastState();
   });
   ipcMain.handle(IPC.PRINTER_TEST, async (_e, printerName: string) => {
-    const result = await printer.testPrint(printerName);
+    const zplConfig = store.getPrinterZplConfig(printerName);
+    const result = await printer.testPrint(printerName, zplConfig);
     // Save RFID-detected label format for this printer
     if ((result as any).detectedLabel) {
       const dl = (result as any).detectedLabel;
@@ -389,6 +390,13 @@ function registerIpcHandlers(): void {
   });
   ipcMain.handle(IPC.PRINTER_PREVIEW, async (_e, labelSize: string) => {
     return printer.generatePreviewBase64(labelSize as any);
+  });
+  ipcMain.handle(IPC.PRINTER_SET_ZPL_CONFIG, (_e, printerName: string, config: any) => {
+    store.setPrinterZplConfig(printerName, config);
+    broadcastState();
+  });
+  ipcMain.handle(IPC.PRINTER_GET_ZPL_CONFIG, (_e, printerName: string) => {
+    return store.getPrinterZplConfig(printerName);
   });
 
   // Queue
@@ -462,6 +470,7 @@ function getAppState(): AppState {
     apiUrl: store.getApiUrl(),
     appUrl: store.getAppUrl(),
     printerLabelFormats: store.getAllPrinterLabelFormats(),
+    printerZplConfigs: store.getAllPrinterZplConfigs(),
   };
 }
 
