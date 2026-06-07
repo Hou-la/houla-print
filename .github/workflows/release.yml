@@ -84,6 +84,14 @@ jobs:
         with:
           node-version: 22
 
+      # Pin Python 3.11 so node-gyp can compile native modules
+      # (@serialport/bindings-cpp). Python 3.12+ removed `distutils`,
+      # which node-gyp's bundled gyp still imports, breaking the macOS build.
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Install dependencies
         run: npm ci
 
