@@ -1,4 +1,4 @@
-name: Auto Bump & Draft Release
+name: Auto Bump & Release
 
 on:
   push:
@@ -47,7 +47,7 @@ jobs:
           git tag ${{ steps.bump.outputs.tag }}
           git push origin master --tags
 
-  # ── Job 2: Build and create draft release ─────────────────────────
+  # ── Job 2: Build and publish the release ──────────────────────────
   release:
     # Run after bump (push to master) OR directly on manual tag push.
     needs: [bump]
@@ -55,7 +55,12 @@ jobs:
     permissions:
       contents: write
     runs-on: ${{ matrix.os }}
+    # macOS build is allowed to fail (no Apple code-signing certificate) without
+    # blocking the Windows build, which is the primary target for Hou.la shops.
+    continue-on-error: ${{ matrix.os == 'macos-latest' }}
     strategy:
+      # Do not cancel the Windows build if the macOS build fails.
+      fail-fast: false
       matrix:
         os: [windows-latest, macos-latest]
     steps:
@@ -82,7 +87,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build and publish draft release
+      - name: Build and publish release
         run: npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
