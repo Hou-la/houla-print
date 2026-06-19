@@ -95,7 +95,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build and publish release
+      # Compile main + preload (tsc) and copy the renderer into dist/ so that
+      # electron-builder finds the app entry (dist/main/index.js). Without this,
+      # packaging fails the sanity check on a missing entry file.
+      - name: Build app
+        run: npm run build
+
+      - name: Publish release
         run: npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
