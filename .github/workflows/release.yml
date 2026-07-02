@@ -104,7 +104,21 @@ jobs:
       - name: Build app
         run: npm run build
 
+      # macOS code-signing + notarization is inert until these org secrets exist
+      # (electron-builder skips signing when CSC_LINK is empty and notarization
+      # when the APPLE_* vars are empty, so the build stays green either way):
+      #   MAC_CSC_LINK              base64 of the Developer ID Application .p12
+      #   MAC_CSC_KEY_PASSWORD      password of that .p12
+      #   APPLE_ID                  Apple Developer account e-mail
+      #   APPLE_APP_SPECIFIC_PASSWORD  app-specific password for notarytool
+      #   APPLE_TEAM_ID             10-char Apple Developer Team ID
+      # CSC_LINK is scoped to the macOS runner so it never hijacks Windows signing.
       - name: Publish release
         run: npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}

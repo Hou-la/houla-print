@@ -59,11 +59,18 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.ico",
+      "artifactName": "Houla-Print-Setup.${ext}"
     },
     "mac": {
       "target": "dmg",
-      "category": "public.app-category.business"
+      "category": "public.app-category.business",
+      "artifactName": "Houla-Print.${ext}",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": true
     },
     "nsis": {
       "oneClick": false,
@@ -80,7 +87,7 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "MikhaelGerbet",
+        "owner": "houla",
         "repo": "houla-print",
         "releaseType": "release"
       }
