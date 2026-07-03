@@ -123,6 +123,10 @@ jobs:
         run: npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS notarization can take 1–2h during Apple backlogs; without this,
+          # electron-builder refuses to attach the late .dmg to a release that was
+          # "published more than 2 hours ago" (the Windows job publishes first).
+          EP_GH_IGNORE_TIME: true
           CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_LINK || '' }}
           CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_KEY_PASSWORD || '' }}
           APPLE_API_KEY: ${{ matrix.os == 'macos-latest' && format('{0}/asc_api_key.p8', runner.temp) || '' }}
