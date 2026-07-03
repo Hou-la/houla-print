@@ -67,7 +67,6 @@
       "category": "public.app-category.business",
       "artifactName": "Houla-Print.${ext}"
     },
-    "_comment_mac_signing": "To sign+notarize (removes the Gatekeeper warning), re-add: hardenedRuntime:true, gatekeeperAssess:false, entitlements+entitlementsInherit: build/entitlements.mac.plist, notarize:true — AND set the CI secrets MAC_CSC_LINK / MAC_CSC_KEY_PASSWORD (Developer ID Application .p12) + APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID (QD77PQAUU5). Needs a Developer ID Application cert, which the account does not have yet.",
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
