@@ -65,7 +65,12 @@
     "mac": {
       "target": "dmg",
       "category": "public.app-category.business",
-      "artifactName": "Houla-Print.${ext}"
+      "artifactName": "Houla-Print.${ext}",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": true
     },
     "nsis": {
       "oneClick": false,
