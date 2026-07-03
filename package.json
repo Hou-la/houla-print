@@ -87,7 +87,7 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "houla",
+        "owner": "Hou-la",
         "repo": "houla-print",
         "releaseType": "release"
       }
