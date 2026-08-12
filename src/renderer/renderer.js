@@ -194,6 +194,8 @@ function updateUI(state) {
     $sepFailed.classList.add('hidden');
   }
 
+  renderUnprintedBanner(state.unprintedEntries || []);
+
   // Environment badge
   if (state.env === 'development') {
     $envBadge.classList.remove('hidden');
@@ -759,6 +761,51 @@ function historyTypeLabel(type) {
   return translated === key ? type : translated;
 }
 
+/**
+ * Bandeau « étiquettes manquantes ».
+ *
+ * Une étiquette qui n'est jamais sortie ne laissait qu'une ligne rouge au fond
+ * de l'onglet Historique et un compteur remis à zéro chaque nuit — pendant un
+ * live, l'app est réduite dans la barre des tâches, personne ne les voit. Le
+ * colis partait incomplet. Le bandeau reste donc affiché, avec le nom de la
+ * cliente concernée, tant que les étiquettes ne sont pas ressorties.
+ */
+function renderUnprintedBanner(entries) {
+  const $banner = document.getElementById('unprinted-banner');
+  const $title = document.getElementById('unprinted-title');
+  const $list = document.getElementById('unprinted-list');
+  if (!$banner || !$title || !$list) return;
+
+  if (!entries.length) {
+    $banner.classList.add('hidden');
+    return;
+  }
+
+  $banner.classList.remove('hidden');
+  $title.textContent = tr('unprinted.title', { count: entries.length });
+
+  // Regroupé par cliente : c'est le colis qui est incomplet, pas la ligne.
+  const byCustomer = new Map();
+  for (const entry of entries) {
+    const p = entry.payload || {};
+    const handle = entry.socialHandle || p.socialHandle || '';
+    const name = entry.customerName || p.customerName || '';
+    const key = handle || name || tr('unprinted.unknown-customer');
+    const products = byCustomer.get(key) || [];
+    products.push(entry.productName);
+    byCustomer.set(key, products);
+  }
+
+  $list.innerHTML = [...byCustomer.entries()]
+    .map(([customer, products]) => `
+      <div class="unprinted-row">
+        <span class="unprinted-row__customer">${escapeHtml(customer)}</span>
+        <span class="unprinted-row__products">${escapeHtml(products.join(' • '))}</span>
+      </div>
+    `)
+    .join('');
+}
+
 function renderHistory(history) {
   if (!$historyList) return;
 
@@ -956,6 +1003,19 @@ bindBtn('btn-refresh-printers', async () => {
   }
 });
 bindBtn('btn-retry-all', () => api.retryAllFailed());
+// ⚠️ Distinct de « Réessayer tout » : celui-là re-télécharge les jobs EN ATTENTE
+// côté serveur, or une étiquette abandonnée y est acquittée `failed` et n'en
+// fait donc plus partie. Les manquantes ne peuvent être relancées que depuis la
+// copie gardée en local.
+bindBtn('btn-reprint-unprinted', async () => {
+  const btn = document.getElementById('btn-reprint-unprinted');
+  if (btn) btn.disabled = true;
+  try {
+    await api.reprintAllUnprinted();
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+});
 bindBtn('btn-clear-history', async () => {
   await api.clearHistory();
   if ($historyList) $historyList.innerHTML = `<div class="empty-state">${escapeHtml(tr('history.empty'))}</div>`;

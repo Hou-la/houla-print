@@ -332,6 +332,26 @@ export class StoreService {
     this.store.set('printHistory', []);
   }
 
+  /**
+   * Étiquettes qui ne sont JAMAIS sorties de l'imprimante et qui n'ont pas été
+   * rattrapées : c'est la liste des colis incomplets. Elle ne se vide pas toute
+   * seule la nuit — contrairement au compteur « échoués aujourd'hui », qui
+   * laissait la vendeuse repartir le lendemain sans savoir qu'il lui manquait
+   * des étiquettes de la veille.
+   */
+  getUnprintedEntries(): PrintHistoryEntry[] {
+    return this.getHistory().filter(e => e.status === 'failed' && !e.resolvedAt);
+  }
+
+  /** Marque une étiquette en échec comme rattrapée (réimpression réussie). */
+  markHistoryResolved(historyEntryId: string): void {
+    const history = this.getHistory();
+    const entry = history.find(e => e.id === historyEntryId);
+    if (!entry || entry.resolvedAt) return;
+    entry.resolvedAt = new Date().toISOString();
+    this.store.set('printHistory', history);
+  }
+
   // ═══════════════════════════════════════════════════════
   // Failed today counter
   // ═══════════════════════════════════════════════════════

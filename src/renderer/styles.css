@@ -702,6 +702,61 @@ body {
 .error-banner span { flex: 1; }
 
 /* ═══════════════════════════════════════════════════════
+   Étiquettes manquantes — bandeau persistant
+   Volontairement plus fort que .error-banner : il signale un colis
+   incomplet, et il reste là tant que ce n'est pas rattrapé.
+   ═══════════════════════════════════════════════════════ */
+
+.unprinted-banner {
+  padding: 10px 16px;
+  background: rgba(220, 53, 69, 0.1);
+  border-top: 1px solid rgba(220, 53, 69, 0.35);
+  border-bottom: 1px solid rgba(220, 53, 69, 0.35);
+  flex-shrink: 0;
+}
+
+.unprinted-banner__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.unprinted-banner__title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.unprinted-banner__list {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 96px;
+  overflow-y: auto;
+}
+
+.unprinted-row {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  min-width: 0;
+}
+
+.unprinted-row__customer {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.unprinted-row__products {
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════
    Empty State
    ═══════════════════════════════════════════════════════ */
 

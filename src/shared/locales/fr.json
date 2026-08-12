@@ -2,11 +2,9 @@
   "app.name": "Hou.la Print",
   "titlebar.minimize": "Réduire",
   "titlebar.close": "Fermer",
-
   "login.tagline": "Impression automatique de vos étiquettes produits, factures et bordereaux dès qu'une commande est payée.",
   "login.button": "Se connecter avec Hou.la",
   "login.hint": "Connectez-vous pour lier vos boutiques",
-
   "status.connected": "Connecté",
   "status.disconnected": "Déconnecté",
   "status.no-workspace": "Activez une boutique",
@@ -14,12 +12,10 @@
   "status.pending": "${count} en attente",
   "status.today": "${count} imprimé(s)",
   "status.failed": "${count} échoué(s)",
-
   "tab.workspaces": "Boutiques",
   "tab.printers": "Imprimantes",
   "tab.history": "Historique",
   "tab.settings": "Paramètres",
-
   "workspaces.title": "Vos boutiques",
   "workspaces.refresh": "↻ Rafraîchir",
   "workspaces.loading": "Chargement…",
@@ -29,7 +25,6 @@
   "workspaces.print-enabled": "Impression activée",
   "workspaces.print-disabled": "Impression désactivée",
   "workspaces.no-shop": "Pas de boutique",
-
   "printers.title": "Imprimantes",
   "printers.detect": "↻ Détecter",
   "printers.detected-title": "Imprimantes détectées",
@@ -49,18 +44,15 @@
   "printers.test.fail-prefix": "✕ ",
   "printers.detect.fail": "✕ Échec",
   "printers.detect.error": "✕ Erreur",
-
   "printer-type.thermal": "Thermique (ZPL)",
   "printer-type.receipt": "Ticket (ESC/POS)",
   "printer-type.standard": "Standard (PDF)",
   "printer-type.niimbot": "Niimbot (étiquettes)",
   "printer-type.unknown": "Inconnu",
-
   "jobtab.product_label": "Étiquettes produits",
   "jobtab.shipping_label": "Étiquette expédition",
   "jobtab.order_summary": "Récapitulatif",
   "jobtab.invoice": "Facture",
-
   "job.product_label.title": "Étiquettes produits",
   "job.product_label.desc": "Imprimées automatiquement à chaque vente. Chaque article de la commande génère une étiquette avec le nom du produit, la variante, le prix, le nom du client et un QR code. Idéal pour identifier les colis avant expédition.",
   "job.shipping_label.title": "Étiquette d'expédition",
@@ -69,7 +61,6 @@
   "job.order_summary.desc": "Imprimé automatiquement dès qu'une commande est payée. Récapitule tous les articles, les prix, le total et les informations du client. Imprimé sur ticket thermique (ESC/POS) ou en PDF selon l'imprimante assignée.",
   "job.invoice.title": "Facture",
   "job.invoice.desc": "Imprimée automatiquement selon votre configuration (au paiement ou à la préparation). Générée en PDF avec vos informations légales, les détails de la commande et les montants TTC. Configurez le déclencheur dans les paramètres de votre boutique sur Hou.la.",
-
   "config.printer": "Imprimante",
   "config.unassigned": "Non assignée",
   "config.label-format": "Format d'étiquette",
@@ -84,7 +75,6 @@
   "config.order_summary.format-value": "Ticket 80 mm ou PDF A4 — selon l'imprimante",
   "config.invoice.format-value": "PDF A4 — imprimé sur imprimante standard",
   "config.enable-shop-hint": "Activez une boutique pour configurer le format",
-
   "zpl.advanced": "⚙️ Configuration avancée ▸",
   "zpl.advanced.open": "⚙️ Configuration avancée ▾",
   "zpl.mode": "Mode d'impression",
@@ -103,7 +93,6 @@
   "zpl.test-print.ok": "✓ Test OK",
   "zpl.test-print.fail": "✗ Échec",
   "zpl.test-print.error": "✗ Erreur",
-
   "label-size.57x32": "57 × 32 mm — Standard",
   "label-size.50x30": "50 × 30 mm — Niimbot standard",
   "label-size.40x30": "40 × 30 mm — Petit (bijoux)",
@@ -113,7 +102,6 @@
   "label-size.100x150": "100 × 150 mm — Expédition (6×4\")",
   "label-size.detected": "${w} × ${h} mm — Détecté (RFID)",
   "label-size.detected-badge": "📡 Format détecté : ${w} × ${h} mm",
-
   "history.title": "Historique des impressions",
   "history.clear": "Effacer",
   "history.empty": "Aucune impression enregistrée",
@@ -121,13 +109,11 @@
   "history.retry": "Réessayer depuis l'API",
   "history.attempts": "${count} tentatives",
   "history.reprint.error": "Erreur de réimpression",
-
   "history-type.product_label": "Étiquette",
   "history-type.order_summary": "Récap.",
   "history-type.invoice": "Facture",
   "history-type.shipping_label": "Expédition",
   "history-type.packing_slip": "Bordereau",
-
   "settings.title": "Paramètres",
   "settings.environment": "Environnement",
   "settings.api": "API",
@@ -137,10 +123,8 @@
   "settings.logout": "Déconnexion",
   "settings.logout.button": "Se déconnecter",
   "settings.language": "Langue",
-
   "error.retry-all": "Réessayer tout",
   "error.prefix": "Erreur : ",
-
   "detect.success.title": "Détection réussie !",
   "detect.success.body": "Votre imprimante contient des étiquettes de <strong>${w} × ${h} mm</strong>. Le format a été appliqué automatiquement.",
   "detect.success.hint": "Si ce n'est pas le bon format, vous pouvez le modifier manuellement dans la liste ci-dessous.",
@@ -149,17 +133,14 @@
   "detect.fail.no-label": "Aucune étiquette détectée. Vérifiez que des étiquettes sont chargées dans l'imprimante.",
   "detect.fail.comm": "Impossible de communiquer avec l'imprimante.",
   "detect.fail.hint": "Vous pouvez sélectionner le format manuellement dans la liste ci-dessous.",
-
   "offline.title": "${printer} — hors ligne",
   "offline.spooled": "${count} tâche${plural} en attente — reprise auto dès reconnexion",
   "offline.since.now": "à l'instant",
   "offline.since.ago": "depuis ${min} min",
-
   "tray.show": "Afficher",
   "tray.dashboard": "Dashboard Hou.la",
   "tray.quit": "Quitter",
   "tray.tooltip": "${app} — ${status} • ${pending} en attente",
-
   "notif.oauth-error": "Erreur de connexion. Veuillez réessayer.",
   "notif.queue-restored": "${count} impression${plural} en attente restaurée${plural}",
   "notif.new-jobs": "${count} nouveau${pluralX} job${plural} d'impression",
@@ -168,12 +149,14 @@
   "notif.print-failed.title": "Hou.la Print — Erreur",
   "notif.print-failed.body": "Impression échouée après ${attempts} tentatives: ${error}",
   "notif.printer-detected": "Imprimante \"${printer}\" détectée. Le test PDF sera disponible prochainement.",
-
   "error.api-unavailable": "API indisponible (${url}). Vérifiez que le serveur est démarré.",
   "error.job-failed": "Job ${jobId} échoué: ${error}",
   "error.printer-not-found": "Imprimante non trouvée",
   "error.printer-not-connected": "Imprimante non connectée",
   "error.history-entry-not-found": "Entrée introuvable dans l'historique",
   "error.reprint-data-missing": "Données d'impression manquantes — impossible de réimprimer",
-  "error.workspace-not-connected": "Workspace non connecté"
+  "error.workspace-not-connected": "Workspace non connecté",
+  "unprinted.title": "${count} étiquette(s) jamais imprimée(s) — colis incomplet",
+  "unprinted.reprint-all": "Tout réimprimer",
+  "unprinted.unknown-customer": "Cliente inconnue"
 }

@@ -104,6 +104,14 @@ export interface PrintHistoryEntry {
   labelFormat?: PrintLabelFormat;
   /** Raw label data (ZPL/ESC-POS text) — stored for reprint. Omitted for Niimbot (re-rendered from payload). */
   labelData?: string | null;
+  /**
+   * Étiquette en échec qui a fini par sortir (réimpression réussie).
+   *
+   * Sans ce marqueur, une étiquette manquante n'existait QUE sous forme d'une
+   * ligne rouge dans l'historique et d'un compteur remis à zéro chaque nuit :
+   * la vendeuse n'avait aucun moyen de savoir qu'il lui manquait un colis.
+   */
+  resolvedAt?: string;
 }
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'no-workspace' | 'error';
@@ -139,6 +147,12 @@ export interface AppState {
   pendingJobsCount: number;
   printedTodayCount: number;
   failedTodayCount: number;
+  /**
+   * Étiquettes jamais sorties et pas encore rattrapées, TOUTES dates confondues.
+   * Le compteur « échoués » ci-dessus repart à zéro chaque jour : il ne pouvait
+   * pas signaler un colis incomplet de la veille.
+   */
+  unprintedEntries: PrintHistoryEntry[];
   offlinePrinters: Array<{ printerName: string; since: string; spooledCount: number }>;
   printHistory: PrintHistoryEntry[];
   lastError: string | null;
@@ -180,6 +194,7 @@ export const IPC = {
   QUEUE_RETRY_ALL: 'queue:retry-all',
   QUEUE_RETRY_JOB: 'queue:retry-job',
   QUEUE_REPRINT_JOB: 'queue:reprint-job',
+  QUEUE_REPRINT_UNPRINTED: 'queue:reprint-unprinted',
   QUEUE_HISTORY: 'queue:history',
   QUEUE_CLEAR_HISTORY: 'queue:clear-history',
 

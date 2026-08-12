@@ -422,6 +422,11 @@ function registerIpcHandlers(): void {
     broadcastState();
     return result;
   });
+  ipcMain.handle(IPC.QUEUE_REPRINT_UNPRINTED, async () => {
+    const result = await queue.reprintAllUnprinted();
+    broadcastState();
+    return result;
+  });
   ipcMain.handle(IPC.QUEUE_HISTORY, () => queue.getHistory());
   ipcMain.handle(IPC.QUEUE_CLEAR_HISTORY, () => {
     queue.clearHistory();
@@ -483,6 +488,7 @@ function getAppState(): AppState {
     pendingJobsCount: queue.getPendingCount(),
     printedTodayCount: queue.getPrintedTodayCount(),
     failedTodayCount: queue.getFailedTodayCount(),
+    unprintedEntries: queue.getUnprintedEntries(),
     offlinePrinters: queue.getStats().offlinePrinters,
     printHistory: queue.getHistory(),
     lastError: lastConnectionError || queue.getLastError(),

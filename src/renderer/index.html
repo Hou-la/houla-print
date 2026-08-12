@@ -58,6 +58,17 @@
       <!-- Offline printer banners (one per offline printer, rendered dynamically) -->
       <div id="offline-banners"></div>
 
+      <!-- Étiquettes jamais sorties de l'imprimante. Reste affiché tant qu'elles
+           ne sont pas rattrapées : un colis incomplet ne doit pas dépendre du fait
+           que la vendeuse ait pensé à ouvrir l'onglet Historique. -->
+      <div class="unprinted-banner hidden" id="unprinted-banner">
+        <div class="unprinted-banner__head">
+          <span class="unprinted-banner__title" id="unprinted-title"></span>
+          <button class="btn btn-sm btn-primary" id="btn-reprint-unprinted" data-i18n="unprinted.reprint-all">Tout réimprimer</button>
+        </div>
+        <div class="unprinted-banner__list" id="unprinted-list"></div>
+      </div>
+
       <!-- Tabs -->
       <nav class="tabs">
         <button class="tab active" data-tab="workspaces" data-i18n="tab.workspaces">Boutiques</button>

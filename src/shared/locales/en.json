@@ -2,11 +2,9 @@
   "app.name": "Hou.la Print",
   "titlebar.minimize": "Minimize",
   "titlebar.close": "Close",
-
   "login.tagline": "Automatic printing of your product labels, invoices and packing slips as soon as an order is paid.",
   "login.button": "Sign in with Hou.la",
   "login.hint": "Sign in to link your shops",
-
   "status.connected": "Connected",
   "status.disconnected": "Disconnected",
   "status.no-workspace": "Enable a shop",
@@ -14,12 +12,10 @@
   "status.pending": "${count} pending",
   "status.today": "${count} printed",
   "status.failed": "${count} failed",
-
   "tab.workspaces": "Shops",
   "tab.printers": "Printers",
   "tab.history": "History",
   "tab.settings": "Settings",
-
   "workspaces.title": "Your shops",
   "workspaces.refresh": "↻ Refresh",
   "workspaces.loading": "Loading…",
@@ -29,7 +25,6 @@
   "workspaces.print-enabled": "Printing enabled",
   "workspaces.print-disabled": "Printing disabled",
   "workspaces.no-shop": "No shop",
-
   "printers.title": "Printers",
   "printers.detect": "↻ Detect",
   "printers.detected-title": "Detected printers",
@@ -49,18 +44,15 @@
   "printers.test.fail-prefix": "✕ ",
   "printers.detect.fail": "✕ Failed",
   "printers.detect.error": "✕ Error",
-
   "printer-type.thermal": "Thermal (ZPL)",
   "printer-type.receipt": "Receipt (ESC/POS)",
   "printer-type.standard": "Standard (PDF)",
   "printer-type.niimbot": "Niimbot (labels)",
   "printer-type.unknown": "Unknown",
-
   "jobtab.product_label": "Product labels",
   "jobtab.shipping_label": "Shipping label",
   "jobtab.order_summary": "Summary",
   "jobtab.invoice": "Invoice",
-
   "job.product_label.title": "Product labels",
   "job.product_label.desc": "Printed automatically on every sale. Each item in the order generates a label with the product name, the variant, the price, the customer name and a QR code. Ideal for identifying parcels before shipping.",
   "job.shipping_label.title": "Shipping label",
@@ -69,7 +61,6 @@
   "job.order_summary.desc": "Printed automatically as soon as an order is paid. Summarizes all items, prices, the total and the customer information. Printed on a thermal receipt (ESC/POS) or as a PDF depending on the assigned printer.",
   "job.invoice.title": "Invoice",
   "job.invoice.desc": "Printed automatically according to your configuration (on payment or on preparation). Generated as a PDF with your legal information, the order details and the tax-inclusive amounts. Configure the trigger in your shop settings on Hou.la.",
-
   "config.printer": "Printer",
   "config.unassigned": "Unassigned",
   "config.label-format": "Label format",
@@ -84,7 +75,6 @@
   "config.order_summary.format-value": "80 mm receipt or A4 PDF — depending on the printer",
   "config.invoice.format-value": "A4 PDF — printed on a standard printer",
   "config.enable-shop-hint": "Enable a shop to configure the format",
-
   "zpl.advanced": "⚙️ Advanced configuration ▸",
   "zpl.advanced.open": "⚙️ Advanced configuration ▾",
   "zpl.mode": "Print mode",
@@ -103,7 +93,6 @@
   "zpl.test-print.ok": "✓ Test OK",
   "zpl.test-print.fail": "✗ Failed",
   "zpl.test-print.error": "✗ Error",
-
   "label-size.57x32": "57 × 32 mm — Standard",
   "label-size.50x30": "50 × 30 mm — Niimbot standard",
   "label-size.40x30": "40 × 30 mm — Small (jewelry)",
@@ -113,7 +102,6 @@
   "label-size.100x150": "100 × 150 mm — Shipping (6×4\")",
   "label-size.detected": "${w} × ${h} mm — Detected (RFID)",
   "label-size.detected-badge": "📡 Detected format: ${w} × ${h} mm",
-
   "history.title": "Print history",
   "history.clear": "Clear",
   "history.empty": "No print recorded",
@@ -121,13 +109,11 @@
   "history.retry": "Retry from the API",
   "history.attempts": "${count} attempts",
   "history.reprint.error": "Reprint error",
-
   "history-type.product_label": "Label",
   "history-type.order_summary": "Summary",
   "history-type.invoice": "Invoice",
   "history-type.shipping_label": "Shipping",
   "history-type.packing_slip": "Packing slip",
-
   "settings.title": "Settings",
   "settings.environment": "Environment",
   "settings.api": "API",
@@ -137,10 +123,8 @@
   "settings.logout": "Log out",
   "settings.logout.button": "Log out",
   "settings.language": "Language",
-
   "error.retry-all": "Retry all",
   "error.prefix": "Error: ",
-
   "detect.success.title": "Detection successful!",
   "detect.success.body": "Your printer contains <strong>${w} × ${h} mm</strong> labels. The format has been applied automatically.",
   "detect.success.hint": "If this is not the right format, you can change it manually in the list below.",
@@ -149,17 +133,14 @@
   "detect.fail.no-label": "No label detected. Make sure labels are loaded in the printer.",
   "detect.fail.comm": "Unable to communicate with the printer.",
   "detect.fail.hint": "You can select the format manually in the list below.",
-
   "offline.title": "${printer} — offline",
   "offline.spooled": "${count} job${plural} pending — auto resume on reconnection",
   "offline.since.now": "just now",
   "offline.since.ago": "${min} min ago",
-
   "tray.show": "Show",
   "tray.dashboard": "Hou.la Dashboard",
   "tray.quit": "Quit",
   "tray.tooltip": "${app} — ${status} • ${pending} pending",
-
   "notif.oauth-error": "Connection error. Please try again.",
   "notif.queue-restored": "${count} pending print${plural} restored",
   "notif.new-jobs": "${count} new print job${plural}",
@@ -168,12 +149,14 @@
   "notif.print-failed.title": "Hou.la Print — Error",
   "notif.print-failed.body": "Print failed after ${attempts} attempts: ${error}",
   "notif.printer-detected": "Printer \"${printer}\" detected. The PDF test will be available soon.",
-
   "error.api-unavailable": "API unavailable (${url}). Make sure the server is running.",
   "error.job-failed": "Job ${jobId} failed: ${error}",
   "error.printer-not-found": "Printer not found",
   "error.printer-not-connected": "Printer not connected",
   "error.history-entry-not-found": "Entry not found in history",
   "error.reprint-data-missing": "Print data missing — cannot reprint",
-  "error.workspace-not-connected": "Workspace not connected"
+  "error.workspace-not-connected": "Workspace not connected",
+  "unprinted.title": "${count} label(s) never printed — incomplete parcel",
+  "unprinted.reprint-all": "Reprint all",
+  "unprinted.unknown-customer": "Unknown customer"
 }

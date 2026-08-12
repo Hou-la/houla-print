@@ -69,6 +69,8 @@ export class QueueService {
   private onStateChange: (() => void) | null = null;
   /** Per-printer offline tracking (key = printer name) */
   private offlinePrinters: Map<string, OfflinePrinterState> = new Map();
+  /** jobId de réimpression → id de la ligne d'historique à rayer si elle sort. */
+  private reprintSources: Map<string, string> = new Map();
 
   constructor(
     private store: StoreService,
@@ -312,6 +314,8 @@ export class QueueService {
       // Success — ack the API (skip for local reprints) and remove from queue
       if (!isReprint) {
         await this.api.ackJob(apiKey, job.id, 'printed').catch(console.error);
+      } else {
+        this.resolveReprintSource(jobId);
       }
       this.pendingJobs.delete(jobId);
       this.store.removeFromPendingQueue(jobId);
@@ -505,6 +509,8 @@ export class QueueService {
       if (pageResult?.success) {
         if (!isReprint) {
           await this.api.ackJob(entry.apiKey, entry.job.id, 'printed').catch(console.error);
+        } else {
+          this.resolveReprintSource(jobId);
         }
         this.pendingJobs.delete(jobId);
         this.store.removeFromPendingQueue(jobId);
@@ -514,13 +520,28 @@ export class QueueService {
           this.store.addHistoryEntry(this.buildHistoryEntry(entry.job, 'printed', null, entry.retries));
         }
       } else {
-        // Page failed — handle error for this and remaining jobs
+        // Page failed — only THIS job carries the error.
         const errorMsg = pageResult?.error || 'Unknown print failure';
         console.error(`[Queue] Niimbot batch page ${i + 1}/${batch.length} failed: ${errorMsg}`);
         this.handlePrintError(jobId, entry, printerName, errorMsg);
-        // Remaining pages were already skipped by printBitmapMultiPage
-        for (let j = i + 1; j < batch.length; j++) {
-          this.handlePrintError(batch[j].jobId, batch[j].entry, printerName, 'Skipped after previous page failure');
+
+        // ⚠️ Les pages suivantes n'ont JAMAIS été envoyées à l'imprimante : le
+        // protocole Niimbot abandonne la séquence dès qu'une page échoue. On les
+        // laissait pourtant passer par handlePrintError avec « Skipped after
+        // previous page failure » — un message que isTransientError ne reconnaît
+        // pas, donc traité comme une erreur FATALE. Chaque incident brûlait ainsi
+        // une tentative sur des étiquettes jamais tentées, et au bout de 3 lots
+        // elles étaient déclarées `failed` côté serveur, définitivement perdues,
+        // sans que la vendeuse ne voie rien. C'est exactement ce qui a produit
+        // 19 étiquettes mortes en prod (« Skipped after previous page failure »,
+        // 2026-08-07 et 2026-08-09).
+        //
+        // Elles restent donc simplement en attente : le prochain cycle les
+        // reprendra, une fois la tête de file résolue (l'imprimante en erreur
+        // transitoire est déjà mise en pause par handlePrintError ci-dessus).
+        const skipped = batch.length - (i + 1);
+        if (skipped > 0) {
+          console.warn(`[Queue] ${skipped} étiquette(s) jamais envoyée(s) — laissées en attente, aucune tentative consommée`);
         }
         break;
       }
@@ -837,11 +858,45 @@ export class QueueService {
 
     // Enqueue locally (no API ack needed for reprints)
     this.pendingJobs.set(reprintJob.id, { job: reprintJob, apiKey: '__reprint__', retries: 0 });
+    // Retenir de QUELLE ligne d'historique vient cette réimpression : c'est elle
+    // qu'on rayera de la liste des étiquettes manquantes une fois sortie.
+    this.reprintSources.set(reprintJob.id, entry.id);
     this.persistQueue();
     console.log(`[Queue] Reprint enqueued for "${entry.productName}" (${reprintJob.id})`);
     this.onStateChange?.();
 
     return { success: true };
+  }
+
+  /**
+   * Relance TOUTES les étiquettes qui ne sont jamais sorties.
+   *
+   * `retryAllFailed` ne pouvait pas les récupérer : une étiquette abandonnée est
+   * acquittée `failed` côté serveur, donc elle ne fait plus partie des jobs en
+   * attente que ce bouton re-télécharge. Le seul exemplaire restant est celui
+   * gardé dans l'historique local — c'est de lui qu'on repart.
+   */
+  async reprintAllUnprinted(): Promise<{ requested: number }> {
+    const entries = this.store.getUnprintedEntries();
+    let requested = 0;
+    for (const entry of entries) {
+      const result = await this.reprintJob(entry.id);
+      if (result.success) requested++;
+    }
+    console.log(`[Queue] Réimpression demandée pour ${requested}/${entries.length} étiquette(s) manquante(s)`);
+    return { requested };
+  }
+
+  getUnprintedEntries(): PrintHistoryEntry[] {
+    return this.store.getUnprintedEntries();
+  }
+
+  /** Une réimpression a abouti → l'étiquette n'est plus manquante. */
+  private resolveReprintSource(jobId: string): void {
+    const sourceId = this.reprintSources.get(jobId);
+    if (!sourceId) return;
+    this.store.markHistoryResolved(sourceId);
+    this.reprintSources.delete(jobId);
   }
 
   /**
