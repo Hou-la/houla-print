@@ -716,10 +716,33 @@ export class NiimbotService {
    * NiimBlue reference: after END_PAGE, poll 0xA3 until status == 1 (done).
    * Status 0 = in progress, 1 = done, other = error/unknown.
    */
-  private async waitForPrintComplete(timeoutMs = 10000): Promise<void> {
+  /**
+   * Attend la confirmation PHYSIQUE de sortie d'une étiquette.
+   *
+   * ⚠️ Cette fonction décidait auparavant « tant pis, on continue » à l'expiration
+   * du délai : la page était alors déclarée imprimée, acquittée `printed` côté
+   * serveur et comptée dans les stats — alors que rien n'était sorti. C'est le
+   * SEUL mécanisme qui peut produire des trous NON contigus au milieu d'un lot
+   * (constaté en prod : « 1/4 et 4/4 sorties, 2/4 et 3/4 jamais vues », les 4
+   * étant `printed` en base). Une panne franche, elle, tue toujours une FIN de
+   * lot, jamais son milieu.
+   *
+   * Un trou silencieux vaut un colis faux ; une étiquette en double se jette.
+   * On préfère donc lever une erreur — classée transitoire par `isTransientError`
+   * (« timeout waiting »), donc réessayée avec backoff au lieu d'être perdue.
+   *
+   * Nuance importante : une imprimante qui répond « j'imprime encore » (status 0)
+   * n'est PAS en panne, elle est lente (gros visuel, batterie faible, Bluetooth).
+   * Tant qu'elle répond, on prolonge jusqu'à `hardCapMs` au lieu de la déclarer
+   * morte — c'est ce qui évite de transformer une lenteur en rafale de doublons.
+   */
+  private async waitForPrintComplete(timeoutMs = 10000, hardCapMs = 30000): Promise<void> {
     const startTime = Date.now();
-    const deadline = startTime + timeoutMs;
+    const hardDeadline = startTime + hardCapMs;
+    let deadline = startTime + timeoutMs;
     let polls = 0;
+    let printerAnswered = false;
+
     while (Date.now() < deadline) {
       polls++;
       try {
@@ -736,10 +759,13 @@ export class NiimbotService {
           return;
         }
         if (status === 0) {
-          // Still printing — poll again quickly (no artificial delay, sendAndWait provides pacing)
+          // Toujours en cours : l'imprimante est vivante, on lui laisse du temps.
+          printerAnswered = true;
+          deadline = Math.min(Date.now() + timeoutMs, hardDeadline);
           continue;
         }
         // Unknown status — brief pause before retry
+        printerAnswered = true;
         await new Promise(r => setTimeout(r, 30));
       } catch (err: any) {
         console.warn(`[Niimbot] Print status poll error: ${err.message}`);
@@ -747,7 +773,12 @@ export class NiimbotService {
         await new Promise(r => setTimeout(r, 100));
       }
     }
-    console.warn(`[Niimbot] Print status poll timeout after ${polls} polls — continuing anyway`);
+
+    const waited = Date.now() - startTime;
+    console.error(
+      `[Niimbot] Aucune confirmation de sortie après ${polls} sondages (${waited}ms, imprimante ${printerAnswered ? 'répondante' : 'muette'}) — étiquette considérée NON imprimée`,
+    );
+    throw new Error(`Timeout waiting for print completion after ${waited}ms`);
   }
 
   private send(data: Buffer): void {
