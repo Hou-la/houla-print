@@ -97,8 +97,27 @@ export class ApiService {
       }),
     });
     if (!res.ok) {
-      this.store.clearAuth();
-      throw new Error('Refresh token expired');
+      // ⚠️ NE PAS effacer les credentials pour n'importe quel échec.
+      //
+      // Ce `clearAuth()` était inconditionnel : un 429 (quota) ou un 5xx
+      // (serveur indisponible) effaçait le jeton d'accès, le jeton de
+      // rafraîchissement ET les clés API de TOUS les workspaces. Un simple
+      // pic de trafic déconnectait donc l'agent, et la vendeuse devait tout
+      // reconfigurer sans comprendre pourquoi. Vécu le 2026-09-11 : le
+      // serveur plafonnait `POST /api/oauth/token` à 5 req/min (le seau
+      // anti-brute-force de login), donc un lot d'étiquettes suffisait.
+      //
+      // Seul un refus DÉFINITIF du jeton justifie d'effacer : 400
+      // (`invalid_grant`) ou 401. Tout le reste est transitoire et doit
+      // ressortir comme tel, pour être réessayé.
+      const definitif = res.status === 400 || res.status === 401;
+      if (definitif) {
+        this.store.clearAuth();
+        throw new Error(`Refresh token rejected (${res.status}) — re-authentication required`);
+      }
+      throw new Error(
+        `Token refresh temporarily failed: ${res.status} ${res.statusText} — credentials kept`,
+      );
     }
     const data = await res.json() as { access_token: string; refresh_token?: string };
     this.store.setAccessToken(data.access_token);

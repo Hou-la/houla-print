@@ -5,41 +5,13 @@ import { PrinterService } from './printer.service';
 import { PrintJob, PrintHistoryEntry, WorkspaceState } from '../../shared/types';
 import { LabelContent } from './niimbot';
 import { t } from '../../shared/i18n';
+import { isTransientError } from './transient-errors';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAYS = [2000, 5000, 15000]; // ms — for fatal errors only
 
 // For transient errors (printer offline/no paper), use escalating backoff with no upper limit on retries
 const TRANSIENT_RETRY_DELAYS = [2000, 5000, 10000, 20000, 30000, 60000]; // last value repeats forever
-
-/**
- * Determine if an error is transient (printer offline, connection lost, no paper)
- * vs fatal (corrupt data, unsupported format, render failure).
- * Transient errors get infinite retries; fatal errors get MAX_RETRIES.
- */
-function isTransientError(errorMsg: string): boolean {
-  const lower = errorMsg.toLowerCase();
-  return (
-    lower.includes('non connectée') ||
-    lower.includes('not connected') ||
-    lower.includes('not open') ||
-    lower.includes('port not open') ||
-    lower.includes('cannot open') ||
-    lower.includes('timeout waiting') ||
-    lower.includes('handshake failed') ||
-    lower.includes('access denied') ||
-    lower.includes('device not configured') ||
-    lower.includes('resource busy') ||
-    lower.includes('no such file or directory') ||
-    lower.includes('enoent') ||
-    lower.includes('eperm') ||
-    lower.includes('eacces') ||
-    lower.includes('print failed') ||    // generic Niimbot print failure
-    lower.includes('connection lost') ||
-    lower.includes('paper') ||           // out of paper
-    lower.includes('busy')               // printer busy
-  );
-}
 
 /** Build "1/3" from quantityIndex and quantity fields */
 function buildQuantityFraction(idx: unknown, total: unknown): string | undefined {
@@ -656,7 +628,7 @@ export class QueueService {
           await this.printer.printPdf(printerName, buffer, zplConfig);
         } else if (job.labelUrl) {
           // Download PDF from external URL (e.g. Sendcloud label)
-          const pdfBuffer = await this.downloadPdfFromUrl(job.labelUrl);
+          const pdfBuffer = await this.downloadPdfFromUrl(job.labelUrl, job);
           const zplConfig = this.store.getPrinterZplConfig(printerName);
           await this.printer.printPdf(printerName, pdfBuffer, zplConfig);
         } else {
@@ -674,17 +646,36 @@ export class QueueService {
    * If the URL is an internal API path (starts with /api/), resolves it
    * against the configured API base URL and adds JWT authentication.
    */
-  private async downloadPdfFromUrl(url: string): Promise<Buffer> {
+  private async downloadPdfFromUrl(url: string, job?: PrintJob): Promise<Buffer> {
     let resolvedUrl = url;
     const headers: Record<string, string> = {};
+    // Clé API du workspace : le SEUL credential dont l'agent a besoin pour
+    // tout le reste de son travail (lire la file, acquitter un job).
+    const apiKey = job ? this.getApiKeyForJob(job) : '';
+    // Les URLs `/api/print/...` acceptent la clé API (JwtOrApiKeyGuard) ;
+    // l'ancienne route `/api/manager/shop/...` n'accepte qu'un JWT.
+    const accepteCleApi = url.startsWith('/api/print/') && !!apiKey;
 
     if (url.startsWith('/api/')) {
       // Internal API endpoint — resolve against base URL and add auth
       const baseUrl = this.store.getApiUrl();
       resolvedUrl = `${baseUrl}${url}`;
-      const token = this.store.getAccessToken();
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+      if (accepteCleApi) {
+        // ⚠️ Chemin PRÉFÉRÉ. L'agent devait auparavant présenter un JWT
+        // utilisateur pour le seul téléchargement du PDF, alors qu'il
+        // s'authentifie par clé API pour tout le reste : il jonglait donc
+        // avec deux credentials pour un seul geste, et tout 401 déclenchait
+        // un rafraîchissement. Or le serveur plafonnait
+        // `POST /api/oauth/token` à 5 req/min, si bien qu'un lot
+        // d'étiquettes partait en 429 — erreur avalée, puis réémise en
+        // « PDF download failed: 401 Unauthorized » trompeur (incident du
+        // 2026-09-11). Avec la clé API, plus de jeton à rafraîchir du tout.
+        headers['X-API-Key'] = apiKey;
+      } else {
+        const token = this.store.getAccessToken();
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
       }
     } else {
       // External URL — no auth added
@@ -692,14 +683,22 @@ export class QueueService {
 
     let response = await fetch(resolvedUrl, { headers });
 
-    // Auto-refresh JWT on 401 for internal API calls
-    if (response.status === 401 && url.startsWith('/api/')) {
+    // Auto-refresh JWT on 401 — uniquement sur le chemin JWT. Une clé API ne
+    // se rafraîchit pas : un 401 y est définitif et doit remonter tel quel.
+    if (response.status === 401 && url.startsWith('/api/') && !accepteCleApi) {
       try {
         const newToken = await this.api.refreshAccessToken();
         headers['Authorization'] = `Bearer ${newToken}`;
         response = await fetch(resolvedUrl, { headers });
-      } catch {
-        // refresh failed — throw the original 401
+      } catch (err) {
+        // ⚠️ Ce `catch` était VIDE et réémettait le 401 d'origine. C'est ce
+        // mensonge qui atterrissait dans `print_job.last_error` et faisait
+        // chercher un problème d'authentification là où il y avait un quota.
+        // On fait désormais remonter la vraie cause.
+        const cause = err instanceof Error ? err.message : String(err);
+        throw new Error(
+          `PDF download failed: ${response.status} ${response.statusText} — token refresh failed: ${cause}`,
+        );
       }
     }
 
