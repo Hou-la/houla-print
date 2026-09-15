@@ -63,7 +63,10 @@
       "artifactName": "Houla-Print-Setup.${ext}"
     },
     "mac": {
-      "target": "dmg",
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "category": "public.app-category.business",
       "artifactName": "Houla-Print.${ext}",
       "hardenedRuntime": true,
